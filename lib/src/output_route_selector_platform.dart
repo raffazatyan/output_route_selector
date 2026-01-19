@@ -42,18 +42,21 @@ class OutputRouteSelector {
   /// });
   /// ```
   Stream<AudioModel?> get onAudioRouteChanged {
-    _eventStream ??= _eventChannel.receiveBroadcastStream().map((event) {
-      final map = Map<String, dynamic>.from(event as Map);
-      
-      // Only return AudioModel if activeDevice is present
-      if (map['activeDevice'] != null) {
-        return AudioModel.fromJson(
-          Map<String, dynamic>.from(map['activeDevice'] as Map),
-        );
-      }
-      return null;
-    }).where((device) => device != null); // Filter out nulls
-    
+    _eventStream ??= _eventChannel
+        .receiveBroadcastStream()
+        .map((event) {
+          final map = Map<String, dynamic>.from(event as Map);
+
+          // Only return AudioModel if activeDevice is present
+          if (map['activeDevice'] != null) {
+            return AudioModel.fromJson(
+              Map<String, dynamic>.from(map['activeDevice'] as Map),
+            );
+          }
+          return null;
+        })
+        .where((device) => device != null); // Filter out nulls
+
     return _eventStream!;
   }
 }

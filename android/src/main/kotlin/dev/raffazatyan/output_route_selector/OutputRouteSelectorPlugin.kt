@@ -123,7 +123,13 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                         .addControlCategory(MediaControlIntent.CATEGORY_LIVE_AUDIO)
                         .build()
                     
-                    val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(act)
+                    // Use themed context to avoid translucent background error
+                    val themedContext = android.view.ContextThemeWrapper(
+                        act,
+                        androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog
+                    )
+                    
+                    val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(themedContext)
                     dialog.routeSelector = selector
                     dialog.show()
                     Log.d(TAG, "Audio output dialog shown")
