@@ -2,6 +2,10 @@
 
 A Flutter plugin to select and manage audio output routes on iOS devices. Supports speaker, receiver (earpiece), wired headsets, and Bluetooth devices.
 
+## Demo
+
+Check out the [example app](example/) for a complete demonstration.
+
 ## Features
 
 - 🔊 Get a list of all available audio output devices
