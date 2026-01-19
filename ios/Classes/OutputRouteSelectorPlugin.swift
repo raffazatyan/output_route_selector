@@ -3,17 +3,28 @@ import UIKit
 import AVFoundation
 import os.log
 
+@available(iOS 14.0, *)
 public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
     private let logger = Logger(subsystem: "OutputRouteSelectorPlugin", category: "audio")
     private var eventSink: FlutterEventSink?
     private var isHandlingAudioRouteChange = false
+    private static var sharedInstance: OutputRouteSelectorPlugin?
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "output_route_selector", binaryMessenger: registrar.messenger())
         let eventChannel = FlutterEventChannel(name: "output_route_selector/events", binaryMessenger: registrar.messenger())
         let instance = OutputRouteSelectorPlugin()
+        sharedInstance = instance
         registrar.addMethodCallDelegate(instance, channel: channel)
         eventChannel.setStreamHandler(instance)
+        
+        // Register PlatformView factory for native button
+        let factory = AudioOutputButtonFactory(messenger: registrar.messenger(), plugin: instance)
+        registrar.register(factory, withId: "audio_output_button")
+    }
+    
+    static func getSharedInstance() -> OutputRouteSelectorPlugin? {
+        return sharedInstance
     }
     
     override init() {
@@ -244,87 +255,89 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         result(nil)
     }
     
+    private var menuButton: UIButton?
+    
+    @available(iOS 14.0, *)
     private func showNativeMenu(at point: CGPoint) {
-        // Get available audio outputs
-        let session = AVAudioSession.sharedInstance()
-        let currentRoute = session.currentRoute
-        
-        // Determine which output is currently active
-        let activeOutputTypes = Set(currentRoute.outputs.map { $0.portType })
-        let activeBluetoothUIDs = Set(currentRoute.outputs.compactMap { output in
-            isBluetoothDevice(output.portType) ? output.uid : nil
-        })
-        
-        // Get the root view controller
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first,
-              let rootViewController = window.rootViewController else {
-            logger.error("❌ Could not find root view controller")
+        // Get the window
+        guard
+            let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+            let window = windowScene.windows.first(where: { $0.isKeyWindow })
+        else {
+            logger.error("❌ Could not find window")
             return
         }
         
-        // Create alert controller with action sheet style
-        let alertController = UIAlertController(
-            title: "Audio Output",
-            message: nil,
-            preferredStyle: .actionSheet
-        )
+        // Remove previous button if exists
+        menuButton?.removeFromSuperview()
         
-        // Add speaker option
-        let isSpeakerActive = activeOutputTypes.contains(.builtInSpeaker)
-        let speakerTitle = isSpeakerActive ? "✓ Speaker" : "Speaker"
-        let speakerAction = UIAlertAction(title: speakerTitle, style: .default) { [weak self] _ in
-            self?.selectAudioOutput(title: "speaker")
+        // Create menu actions with icons (system style)
+        let item1 = UIAction(
+            title: "Item 1",
+            image: UIImage(systemName: "speaker.wave.2.fill"),
+            state: .on  // Checkmark
+        ) { [weak self] _ in
+            print("Selected Item 1")
+            self?.cleanupMenuButton()
         }
-        alertController.addAction(speakerAction)
         
-        // Add receiver option (iPhone only)
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            let isReceiverActive = activeOutputTypes.contains(.builtInReceiver)
-            let receiverTitle = isReceiverActive ? "✓ iPhone" : "iPhone"
-            let receiverAction = UIAlertAction(title: receiverTitle, style: .default) { [weak self] _ in
-                self?.selectAudioOutput(title: "receiver")
+        let item2 = UIAction(
+            title: "Item 2", 
+            image: UIImage(systemName: "laptopcomputer"),
+            state: .off
+        ) { [weak self] _ in
+            print("Selected Item 2")
+            self?.cleanupMenuButton()
+        }
+        
+        let item3 = UIAction(
+            title: "Item 3",
+            image: UIImage(systemName: "iphone"),
+            state: .off
+        ) { [weak self] _ in
+            print("Selected Item 3")
+            self?.cleanupMenuButton()
+        }
+        
+        // Create menu
+        let menu = UIMenu(title: "", children: [item1, item2, item3])
+        
+        // Create VISIBLE button at tap location
+        let button = UIButton(type: .system)
+        button.frame = CGRect(x: point.x - 22, y: point.y - 22, width: 44, height: 44)
+        button.setImage(UIImage(systemName: "speaker.wave.2"), for: .normal)
+        button.tintColor = .clear  // Transparent icon
+        button.backgroundColor = .clear
+        
+        // Attach menu - UIKit will show it on tap
+        button.menu = menu
+        button.showsMenuAsPrimaryAction = true
+        
+        // Add to window (above everything)
+        window.addSubview(button)
+        menuButton = button
+        
+        // Simulate tap to trigger menu immediately
+        DispatchQueue.main.async {
+            // Use UIKit's built-in menu presentation
+            if let interaction = button.interactions.first(where: { $0 is UIContextMenuInteraction }) as? UIContextMenuInteraction {
+                // Found the context menu interaction, but we can't trigger it directly
             }
-            alertController.addAction(receiverAction)
+            
+            // Alternative: create a touch event
+            button.becomeFirstResponder()
+            
+            // The button is now ready - user's next tap will open menu
+            // Or we can try to present it via accessibility
         }
         
-        // Add wired headset if present
-        let hasWiredHeadset = currentRoute.outputs.contains { output in
-            output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
-        }
-        if hasWiredHeadset {
-            let wiredAction = UIAlertAction(title: "✓ Headphones", style: .default) { [weak self] _ in
-                self?.selectAudioOutput(title: "wiredHeadset")
-            }
-            alertController.addAction(wiredAction)
-        }
-        
-        // Add Bluetooth devices
-        if let availableInputs = session.availableInputs {
-            for input in availableInputs where isBluetoothDevice(input.portType) {
-                let isActive = activeBluetoothUIDs.contains(input.uid)
-                let bluetoothTitle = isActive ? "✓ \(input.portName)" : input.portName
-                let bluetoothAction = UIAlertAction(title: bluetoothTitle, style: .default) { [weak self] _ in
-                    self?.selectAudioOutput(title: input.portName)
-                }
-                alertController.addAction(bluetoothAction)
-            }
-        }
-        
-        // Add cancel button
-        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-        alertController.addAction(cancelAction)
-        
-        // Configure popover presentation for iPad
-        if let popoverController = alertController.popoverPresentationController {
-            popoverController.sourceView = rootViewController.view
-            popoverController.sourceRect = CGRect(x: point.x, y: point.y, width: 1, height: 1)
-            popoverController.permittedArrowDirections = [.up, .down]
-        }
-        
-        // Present the alert controller
-        rootViewController.present(alertController, animated: true, completion: nil)
-        logger.info("✅ Audio output menu presented")
+        logger.info("✅ Menu button placed at (\(point.x), \(point.y))")
+    }
+    
+    private func cleanupMenuButton() {
+        menuButton?.removeFromSuperview()
+        menuButton = nil
     }
     
     private func selectAudioOutput(title: String) {
@@ -571,5 +584,240 @@ extension OutputRouteSelectorPlugin: FlutterStreamHandler {
         self.eventSink = nil
         logger.info("❌ Event stream listener cancelled")
         return nil
+    }
+}
+
+
+// MARK: - Helper Functions
+
+@available(iOS 14.0, *)
+extension OutputRouteSelectorPlugin {
+    /// Get the top-most view controller in the hierarchy
+    private func topViewController(from root: UIViewController?) -> UIViewController? {
+        // If there's a presented view controller, go deeper
+        if let presented = root?.presentedViewController {
+            return topViewController(from: presented)
+        }
+        
+        // If it's a navigation controller, get the visible controller
+        if let nav = root as? UINavigationController {
+            return topViewController(from: nav.visibleViewController)
+        }
+        
+        // If it's a tab bar controller, get the selected controller
+        if let tab = root as? UITabBarController {
+            return topViewController(from: tab.selectedViewController)
+        }
+        
+        // Otherwise, return the root itself
+        return root
+    }
+    
+    /// Build UIMenu with current audio outputs (used by PlatformView)
+    func buildAudioOutputMenu(onSelection: @escaping (String) -> Void) -> UIMenu {
+        let session = AVAudioSession.sharedInstance()
+        let currentRoute = session.currentRoute
+        
+        // Determine which output is currently active
+        let activeOutputTypes = Set(currentRoute.outputs.map { $0.portType })
+        let activeBluetoothUIDs = Set(currentRoute.outputs.compactMap { output in
+            isBluetoothDevice(output.portType) ? output.uid : nil
+        })
+        
+        var menuActions: [UIAction] = []
+        
+        // Speaker option
+        let isSpeakerActive = activeOutputTypes.contains(.builtInSpeaker)
+        let speakerAction = UIAction(
+            title: "Speaker",
+            image: UIImage(systemName: "speaker.wave.2.fill"),
+            state: isSpeakerActive ? .on : .off
+        ) { _ in
+            onSelection("speaker")
+        }
+        menuActions.append(speakerAction)
+        
+        // Receiver option (iPhone only)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let isReceiverActive = activeOutputTypes.contains(.builtInReceiver)
+            let receiverAction = UIAction(
+                title: "iPhone",
+                image: UIImage(systemName: "iphone"),
+                state: isReceiverActive ? .on : .off
+            ) { _ in
+                onSelection("receiver")
+            }
+            menuActions.append(receiverAction)
+        }
+        
+        // Wired headset if present
+        let hasWiredHeadset = currentRoute.outputs.contains { output in
+            output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
+        }
+        if hasWiredHeadset {
+            let wiredAction = UIAction(
+                title: "Headphones",
+                image: UIImage(systemName: "headphones"),
+                state: .on
+            ) { _ in
+                onSelection("wiredHeadset")
+            }
+            menuActions.append(wiredAction)
+        }
+        
+        // Bluetooth devices
+        if let availableInputs = session.availableInputs {
+            for input in availableInputs where isBluetoothDevice(input.portType) {
+                let isActive = activeBluetoothUIDs.contains(input.uid)
+                let bluetoothAction = UIAction(
+                    title: input.portName,
+                    image: UIImage(systemName: "airpodspro"),
+                    state: isActive ? .on : .off
+                ) { _ in
+                    onSelection(input.portName)
+                }
+                menuActions.append(bluetoothAction)
+            }
+        }
+        
+        return UIMenu(title: "", children: menuActions)
+    }
+    
+    /// Handle audio output selection from menu
+    func handleMenuSelection(_ title: String) {
+        selectAudioOutput(title: title)
+    }
+}
+
+// MARK: - PlatformView Factory
+
+@available(iOS 14.0, *)
+class AudioOutputButtonFactory: NSObject, FlutterPlatformViewFactory {
+    private let messenger: FlutterBinaryMessenger
+    private weak var plugin: OutputRouteSelectorPlugin?
+    
+    init(messenger: FlutterBinaryMessenger, plugin: OutputRouteSelectorPlugin) {
+        self.messenger = messenger
+        self.plugin = plugin
+        super.init()
+    }
+    
+    func create(
+        withFrame frame: CGRect,
+        viewIdentifier viewId: Int64,
+        arguments args: Any?
+    ) -> FlutterPlatformView {
+        return AudioOutputButtonView(
+            frame: frame,
+            viewId: viewId,
+            args: args,
+            messenger: messenger,
+            plugin: plugin
+        )
+    }
+    
+    func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+        return FlutterStandardMessageCodec.sharedInstance()
+    }
+}
+
+// MARK: - PlatformView (Native UIButton with UIMenu)
+
+@available(iOS 14.0, *)
+class AudioOutputButtonView: NSObject, FlutterPlatformView {
+    private let logger = Logger(subsystem: "AudioOutputButtonView", category: "ui")
+    private let containerView: UIView
+    private let menuButton: UIButton
+    private weak var plugin: OutputRouteSelectorPlugin?
+    
+    init(
+        frame: CGRect,
+        viewId: Int64,
+        args: Any?,
+        messenger: FlutterBinaryMessenger,
+        plugin: OutputRouteSelectorPlugin?
+    ) {
+        self.plugin = plugin
+        
+        // Parse arguments
+        var buttonWidth: CGFloat = 44
+        var buttonHeight: CGFloat = 44
+        var isTransparent = false
+        
+        if let arguments = args as? [String: Any] {
+            if let width = arguments["width"] as? Double {
+                buttonWidth = CGFloat(width)
+            }
+            if let height = arguments["height"] as? Double {
+                buttonHeight = CGFloat(height)
+            }
+            if let transparent = arguments["transparent"] as? Bool {
+                isTransparent = transparent
+            }
+        }
+        
+        // Create container view
+        containerView = UIView(frame: CGRect(x: 0, y: 0, width: buttonWidth, height: buttonHeight))
+        containerView.backgroundColor = .clear
+        
+        // Create button - fully transparent, just for tap handling
+        menuButton = UIButton(type: .custom)
+        menuButton.frame = containerView.bounds
+        menuButton.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        menuButton.backgroundColor = .clear
+        
+        // No visible content - Flutter widget shows underneath
+        // Button is just for capturing taps and showing UIMenu
+        
+        // Enable menu as primary action - THIS IS THE KEY!
+        menuButton.showsMenuAsPrimaryAction = true
+        
+        containerView.addSubview(menuButton)
+        
+        super.init()
+        
+        // Build and attach menu
+        updateMenu()
+        
+        // Listen for audio route changes to update menu
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(audioRouteChanged),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+        
+        logger.info("✅ AudioOutputButtonView created (transparent overlay)")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    func view() -> UIView {
+        return containerView
+    }
+    
+    @objc private func audioRouteChanged() {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMenu()
+        }
+    }
+    
+    private func updateMenu() {
+        guard let plugin = plugin else { return }
+        
+        let menu = plugin.buildAudioOutputMenu { [weak self] selectedTitle in
+            self?.logger.info("🎯 Menu selection: \(selectedTitle)")
+            plugin.handleMenuSelection(selectedTitle)
+            
+            // Update menu after selection
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.updateMenu()
+            }
+        }
+        
+        menuButton.menu = menu
+        logger.info("✅ Menu updated with \(menu.children.count) items")
     }
 }

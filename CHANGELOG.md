@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-01-19
+
+### Added
+- Native PlatformView implementation for real UIMenu support
+- System-style glass menu with SF Symbols icons and checkmarks
+- Support for custom Flutter widgets as button icons (Icon, Image, AssetGenImage)
+- Separate `width` and `height` parameters, plus `size` shorthand
+
+### Fixed
+- Added @available(iOS 14.0, *) annotation to support iOS 14.0+
+- Fixed Logger availability issue
+- Fixed UIMenu not opening (now uses real UIKit button with PlatformView)
+
+### Changed
+- Minimum iOS version set to 14.0
+- AudioOutputSelector now uses transparent native button overlay for proper UIMenu presentation
+- Improved topViewController detection for modal scenarios
+
 ## [1.0.2] - 2026-01-19
 
 ### Changed

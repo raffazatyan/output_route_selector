@@ -44,7 +44,7 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
   void _setupRouteChangeListener() {
     _subscription = OutputRouteSelector.onAudioRouteChanged.listen((event) {
       setState(() {
-        _lastEvent = 
+        _lastEvent =
             'Route changed: ${event.reasonDescription}\n'
             'Active: ${event.activeDevice?.outputName ?? 'Unknown'}';
       });
@@ -69,9 +69,9 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
       await _loadDevices();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -89,15 +89,12 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('Audio Output Selector'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadDevices,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadDevices),
         ],
       ),
       body: Column(
         children: [
-          // Widget-based selector (easiest way)
+          // Native iOS button with UIMenu (system style)
           Card(
             margin: const EdgeInsets.all(16),
             child: Padding(
@@ -106,29 +103,35 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Widget-based Selector',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    'Native Audio Output Button',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Tap the button to show native menu:'),
+                  const Text('Tap the button to show native iOS menu:'),
                   const SizedBox(height: 12),
-                  Center(
-                    child: AudioOutputSelector(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.volume_up),
-                        label: const Text('Select Audio Output'),
-                        onPressed: null, // Wrapper handles tap
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Native iOS button with UIMenu
+                      AudioOutputSelector(
+                        size: 50,
+                        child: const Icon(
+                          Icons.volume_up,
+                          size: 30,
+                          color: Colors.blue,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      // Another button with different style
+                      AudioOutputSelector(
+                        size: 50,
+                        child: const Icon(
+                          Icons.headset,
+                          size: 30,
+                          color: Colors.indigo,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -198,10 +201,7 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _lastEvent,
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(_lastEvent, style: const TextStyle(fontSize: 12)),
               ],
             ),
           ),

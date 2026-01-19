@@ -14,7 +14,7 @@ Demonstrates how to use the output_route_selector plugin.
 ### Prerequisites
 
 - Flutter 3.3.0 or higher
-- iOS device or simulator (iOS 15.0+)
+- iOS device or simulator (iOS 14.0+)
 
 ### Running the Example
 
