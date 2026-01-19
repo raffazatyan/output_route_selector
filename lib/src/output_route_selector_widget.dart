@@ -3,14 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+const _methodChannel = MethodChannel('output_route_selector/methods');
+
 /// A widget that shows native audio output selection menu.
 ///
-/// Uses your custom Flutter widget as the visual, with an invisible native
-/// button overlay to handle taps and show the platform-specific menu.
+/// Uses your custom Flutter widget as the visual, with native menu on tap.
 ///
 /// **Platforms:**
 /// - **iOS**: Shows UIMenu with glass/blur effect (iOS 14+ style)
-/// - **Android**: Shows MediaRouteChooserDialog for audio output selection
+/// - **Android**: Shows WhatsApp-style bottom sheet dialog
 ///
 /// **Key Features:**
 /// - Use any Flutter widget as the icon (Icon, Image, AssetGenImage, etc.)
@@ -55,8 +56,7 @@ class AudioOutputSelector extends StatelessWidget {
   /// On iOS, this renders your [child] widget with an invisible native
   /// UIButton overlay that shows the UIMenu when tapped.
   ///
-  /// On Android, this renders your [child] widget with an invisible native
-  /// View overlay that shows MediaRouteChooserDialog when tapped.
+  /// On Android, this renders your [child] widget that shows native dialog on tap.
   ///
   /// On other platforms, it displays the [child] widget without menu functionality.
   const AudioOutputSelector({
@@ -72,7 +72,7 @@ class AudioOutputSelector extends StatelessWidget {
     final effectiveWidth = size ?? width;
     final effectiveHeight = size ?? height;
 
-    // Use PlatformView on iOS for real UIMenu support
+    // Use PlatformView on iOS for real UIMenu support (required for App Store)
     if (Platform.isIOS) {
       return SizedBox(
         width: effectiveWidth,
@@ -98,28 +98,12 @@ class AudioOutputSelector extends StatelessWidget {
       );
     }
 
-    // Use PlatformView on Android for MediaRouteChooserDialog
+    // On Android, use GestureDetector + MethodChannel (simpler, no PlatformView needed)
     if (Platform.isAndroid) {
-      return SizedBox(
+      return _AndroidAudioOutputSelector(
         width: effectiveWidth,
         height: effectiveHeight,
-        child: Stack(
-          children: [
-            // Flutter widget (your icon/image)
-            Positioned.fill(child: Center(child: child)),
-            // Invisible native view overlay for dialog trigger
-            Positioned.fill(
-              child: AndroidView(
-                viewType: 'audio_output_button',
-                creationParams: {
-                  'width': effectiveWidth,
-                  'height': effectiveHeight,
-                },
-                creationParamsCodec: const StandardMessageCodec(),
-              ),
-            ),
-          ],
-        ),
+        child: child,
       );
     }
 
@@ -128,6 +112,57 @@ class AudioOutputSelector extends StatelessWidget {
       width: effectiveWidth,
       height: effectiveHeight,
       child: Center(child: child),
+    );
+  }
+}
+
+/// Android-specific widget that handles positioning correctly
+class _AndroidAudioOutputSelector extends StatefulWidget {
+  final double width;
+  final double height;
+  final Widget child;
+
+  const _AndroidAudioOutputSelector({
+    required this.width,
+    required this.height,
+    required this.child,
+  });
+
+  @override
+  State<_AndroidAudioOutputSelector> createState() =>
+      _AndroidAudioOutputSelectorState();
+}
+
+class _AndroidAudioOutputSelectorState
+    extends State<_AndroidAudioOutputSelector> {
+  final GlobalKey _key = GlobalKey();
+
+  void _showDialog() {
+    final RenderBox? renderBox =
+        _key.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    _methodChannel.invokeMethod('showAudioOutputDialog', {
+      'x': position.dx.toInt(),
+      'y': position.dy.toInt(),
+      'width': size.width.toInt(),
+      'height': size.height.toInt(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: _key,
+      onTap: _showDialog,
+      child: SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: Center(child: widget.child),
+      ),
     );
   }
 }

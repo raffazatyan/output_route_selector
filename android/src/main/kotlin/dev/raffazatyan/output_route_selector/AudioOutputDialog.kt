@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -21,6 +22,10 @@ import android.widget.TextView
 class AudioOutputDialog(
     context: Context,
     private val audioManager: AudioManager,
+    private val anchorX: Int,
+    private val anchorY: Int,
+    private val anchorWidth: Int,
+    private val anchorHeight: Int,
     private val onDeviceSelected: (title: String, deviceType: String) -> Unit
 ) : Dialog(context) {
 
@@ -37,24 +42,84 @@ class AudioOutputDialog(
     init {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        window?.setLayout(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT
-        )
-        window?.setGravity(Gravity.BOTTOM)
-        window?.attributes?.windowAnimations = android.R.style.Animation_InputMethod
-
+        
+        // Remove background dim
+        window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        
         buildDeviceList()
         setContentView(createDialogView())
+        
+        // Position dialog near the anchor button
+        positionDialog()
+    }
+    
+    private fun positionDialog() {
+        val displayMetrics = context.resources.displayMetrics
+        val density = displayMetrics.density
+        
+        // Convert Flutter logical pixels to Android pixels
+        val anchorXPx = (anchorX * density).toInt()
+        val anchorYPx = (anchorY * density).toInt()
+        val anchorWidthPx = (anchorWidth * density).toInt()
+        val anchorHeightPx = (anchorHeight * density).toInt()
+        
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        
+        // Dialog width (max 200dp)
+        val dialogWidth = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 
+            200f, 
+            displayMetrics
+        ).toInt()
+        
+        window?.setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+        
+        val wlp = window?.attributes
+        wlp?.gravity = Gravity.TOP or Gravity.START
+        
+        // Center dialog horizontally on the button
+        var dialogX = anchorXPx + (anchorWidthPx / 2) - (dialogWidth / 2)
+        
+        // Estimate dialog height (44dp per item + padding)
+        val itemHeight = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 
+            44f, 
+            displayMetrics
+        ).toInt()
+        val estimatedHeight = (items.size * itemHeight) + 
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 24f, displayMetrics).toInt()
+        
+        // Position above button
+        var dialogY = anchorYPx - estimatedHeight - 16
+        
+        // If not enough space above, position below
+        if (dialogY < 0) {
+            dialogY = anchorYPx + anchorHeightPx + 16
+        }
+        
+        // Clamp to screen bounds
+        val margin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16f, displayMetrics).toInt()
+        wlp?.x = dialogX.coerceIn(margin, screenWidth - dialogWidth - margin)
+        wlp?.y = dialogY.coerceIn(margin, screenHeight - estimatedHeight - margin)
+        
+        window?.attributes = wlp
+        window?.attributes?.windowAnimations = android.R.style.Animation_Dialog
     }
 
     private fun buildDeviceList() {
         items.clear()
 
-        // Determine current active output
+        // Determine current active output with correct priority
         val isSpeakerOn = audioManager.isSpeakerphoneOn
-        val isBluetoothOn = audioManager.isBluetoothScoOn || audioManager.isBluetoothA2dpOn
+        val isBluetoothScoOn = audioManager.isBluetoothScoOn
         val isWiredOn = audioManager.isWiredHeadsetOn
+        
+        // Determine which one is ACTUALLY active (priority: speaker > wired > bluetooth > receiver)
+        val activeSpeaker = isSpeakerOn
+        val activeWired = !isSpeakerOn && isWiredOn
+        val activeBluetooth = !isSpeakerOn && !isWiredOn && isBluetoothScoOn
+        val activeReceiver = !isSpeakerOn && !isWiredOn && !isBluetoothScoOn
 
         // Speaker (always available)
         items.add(AudioOutputItem(
@@ -62,17 +127,17 @@ class AudioOutputDialog(
             displayTitle = "Speaker",
             deviceType = "speaker",
             iconResName = "ic_volume_up",
-            isActive = isSpeakerOn && !isBluetoothOn && !isWiredOn
+            isActive = activeSpeaker
         ))
 
-        // Earpiece (for phones)
+        // Phone (for phones)
         if (context.packageManager.hasSystemFeature("android.hardware.telephony")) {
             items.add(AudioOutputItem(
                 title = "receiver",
-                displayTitle = "Earpiece",
+                displayTitle = "Phone",
                 deviceType = "receiver",
                 iconResName = "ic_phone",
-                isActive = !isSpeakerOn && !isBluetoothOn && !isWiredOn
+                isActive = activeReceiver
             ))
         }
 
@@ -87,12 +152,14 @@ class AudioOutputDialog(
                     val name = device.productName?.toString() ?: "Bluetooth"
                     if (!addedBluetoothNames.contains(name)) {
                         addedBluetoothNames.add(name)
+                        // Use airpods icon if name contains "airpods", otherwise bluetooth speaker
+                        val icon = if (name.lowercase().contains("airpods")) "ic_airpods" else "ic_bluetooth"
                         items.add(AudioOutputItem(
                             title = name,
                             displayTitle = name,
                             deviceType = "bluetooth",
-                            iconResName = "ic_bluetooth",
-                            isActive = isBluetoothOn
+                            iconResName = icon,
+                            isActive = activeBluetooth
                         ))
                     }
                 }
@@ -106,7 +173,7 @@ class AudioOutputDialog(
                 displayTitle = "Headphones",
                 deviceType = "wiredHeadset",
                 iconResName = "ic_headset",
-                isActive = true
+                isActive = activeWired
             ))
         }
     }
@@ -128,18 +195,14 @@ class AudioOutputDialog(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             
-            // Dark background with rounded corners (like WhatsApp)
+            // Dark background with rounded corners (popup style)
             val bgDrawable = GradientDrawable().apply {
                 setColor(Color.parseColor("#303030"))
-                cornerRadii = floatArrayOf(
-                    dp(16).toFloat(), dp(16).toFloat(),  // top-left
-                    dp(16).toFloat(), dp(16).toFloat(),  // top-right
-                    0f, 0f,  // bottom-right
-                    0f, 0f   // bottom-left
-                )
+                cornerRadius = dp(12).toFloat()
             }
             background = bgDrawable
-            setPadding(dp(8), dp(16), dp(8), dp(24))
+            elevation = dp(8).toFloat()
+            setPadding(dp(4), dp(8), dp(4), dp(8))
         }
 
         // Add items
@@ -155,15 +218,18 @@ class AudioOutputDialog(
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(56)
+                dp(44)
             )
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(8))
+            setPadding(dp(12), dp(6), dp(12), dp(6))
             
-            // Ripple effect
-            val outValue = TypedValue()
-            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
-            setBackgroundResource(outValue.resourceId)
+            // Gray ripple effect
+            val rippleDrawable = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#505050")),
+                null,
+                android.graphics.drawable.ColorDrawable(Color.WHITE)
+            )
+            background = rippleDrawable
             
             isClickable = true
             isFocusable = true
@@ -176,18 +242,18 @@ class AudioOutputDialog(
 
         // Icon
         val iconView = ImageView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(24), dp(24)).apply {
-                marginEnd = dp(24)
+            layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                marginEnd = dp(12)
             }
-            setColorFilter(Color.WHITE)
             
-            // Use system icons
+            // Use custom icons from drawable resources
             val iconRes = when (item.iconResName) {
-                "ic_volume_up" -> android.R.drawable.ic_lock_silent_mode_off
-                "ic_phone" -> android.R.drawable.ic_menu_call
-                "ic_bluetooth" -> android.R.drawable.stat_sys_data_bluetooth
-                "ic_headset" -> android.R.drawable.ic_lock_silent_mode_off
-                else -> android.R.drawable.ic_lock_silent_mode_off
+                "ic_volume_up" -> R.drawable.ic_phone_speaker
+                "ic_phone" -> R.drawable.ic_phone
+                "ic_bluetooth" -> R.drawable.ic_bluetooth_speaker
+                "ic_airpods" -> R.drawable.ic_airpods
+                "ic_headset" -> R.drawable.ic_headphones
+                else -> R.drawable.ic_phone_speaker
             }
             setImageResource(iconRes)
         }
@@ -202,16 +268,15 @@ class AudioOutputDialog(
             )
             text = item.displayTitle
             setTextColor(Color.WHITE)
-            textSize = 16f
+            textSize = 14f
         }
         itemLayout.addView(titleView)
 
         // Checkmark if active
         if (item.isActive) {
             val checkView = ImageView(context).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
-                setColorFilter(Color.WHITE)
-                setImageResource(android.R.drawable.checkbox_on_background)
+                layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
+                setImageResource(R.drawable.ic_checkmark)
             }
             itemLayout.addView(checkView)
         }
