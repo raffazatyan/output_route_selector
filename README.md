@@ -33,7 +33,7 @@ flutter pub get
 
 ## iOS Setup
 
-No additional setup required! The plugin works out of the box on iOS 12.0+.
+No additional setup required! The plugin works out of the box on iOS 15.0+.
 
 ## Usage
 
