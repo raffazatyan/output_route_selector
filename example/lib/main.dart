@@ -30,50 +30,31 @@ class AudioOutputDemo extends StatefulWidget {
 }
 
 class _AudioOutputDemoState extends State<AudioOutputDemo> {
-  List<AudioModel> _devices = [];
   StreamSubscription<AudioRouteChangeEvent>? _subscription;
-  String _lastEvent = 'No events yet';
+  final List<String> _eventLog = [];
+  AudioModel? _currentDevice;
 
   @override
   void initState() {
     super.initState();
-    _loadDevices();
     _setupRouteChangeListener();
   }
 
   void _setupRouteChangeListener() {
     _subscription = OutputRouteSelector.onAudioRouteChanged.listen((event) {
       setState(() {
-        _lastEvent =
-            'Route changed: ${event.reasonDescription}\n'
-            'Active: ${event.activeDevice?.outputName ?? 'Unknown'}';
+        _currentDevice = event.activeDevice;
+        _eventLog.insert(
+          0,
+          '${DateTime.now().toString().substring(11, 19)} - '
+          '${event.reasonDescription}: ${event.activeDevice?.outputName ?? 'Unknown'}',
+        );
+        // Keep only last 10 events
+        if (_eventLog.length > 10) {
+          _eventLog.removeLast();
+        }
       });
-      _loadDevices();
     });
-  }
-
-  Future<void> _loadDevices() async {
-    try {
-      final devices = await OutputRouteSelector.getAvailableAudioOutputs();
-      setState(() {
-        _devices = devices;
-      });
-    } catch (e) {
-      debugPrint('Error loading devices: $e');
-    }
-  }
-
-  Future<void> _selectDevice(AudioModel device) async {
-    try {
-      await OutputRouteSelector.changeAudioOutput(device);
-      await _loadDevices();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
   }
 
   @override
@@ -88,57 +69,65 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('Audio Output Selector'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadDevices),
-        ],
       ),
       body: Column(
         children: [
-          // Native iOS button with UIMenu (system style)
+          // Native audio output button
           Card(
             margin: const EdgeInsets.all(16),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Native Audio Output Button',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    'Tap to select audio output',
+                    style: TextStyle(fontSize: 16),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('Tap the button to show native iOS menu:'),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Native iOS button with UIMenu
-                      AudioOutputSelector(
-                        size: 50,
-                        child: const Icon(
-                          Icons.volume_up,
-                          size: 30,
-                          color: Colors.blue,
-                        ),
+                  const SizedBox(height: 16),
+                  // Native iOS button with UIMenu
+                  AudioOutputSelector(
+                    size: 64,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(32),
                       ),
-                      const SizedBox(width: 16),
-                      // Another button with different style
-                      AudioOutputSelector(
-                        size: 50,
-                        child: const Icon(
-                          Icons.headset,
-                          size: 30,
-                          color: Colors.indigo,
-                        ),
+                      child: const Icon(
+                        Icons.volume_up,
+                        size: 32,
+                        color: Colors.blue,
                       ),
-                    ],
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                  if (_currentDevice != null) ...[
+                    Text(
+                      'Current: ${_currentDevice!.outputName}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _currentDevice!.deviceType.name.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ] else
+                    const Text(
+                      'Tap the button above',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                 ],
               ),
             ),
           ),
 
-          // Manual device list
+          // Event log
           Expanded(
             child: Card(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -148,7 +137,7 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                   const Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
-                      'Available Devices',
+                      'Event Log',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -156,30 +145,31 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                     ),
                   ),
                   Expanded(
-                    child: _devices.isEmpty
-                        ? const Center(child: CircularProgressIndicator())
+                    child: _eventLog.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No events yet.\nSelect an audio output to see events.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
                         : ListView.builder(
-                            itemCount: _devices.length,
+                            itemCount: _eventLog.length,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemBuilder: (context, index) {
-                              final device = _devices[index];
-                              return ListTile(
-                                leading: Icon(
-                                  _getDeviceIcon(device.deviceType),
-                                  color: device.isActive
-                                      ? Colors.blue
-                                      : Colors.grey,
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  _eventLog[index],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontFamily: 'monospace',
+                                    color: index == 0
+                                        ? Colors.blue
+                                        : Colors.grey[700],
+                                  ),
                                 ),
-                                title: Text(device.outputName),
-                                subtitle: Text(
-                                  device.deviceType.name.toUpperCase(),
-                                ),
-                                trailing: device.isActive
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                      )
-                                    : null,
-                                onTap: () => _selectDevice(device),
                               );
                             },
                           ),
@@ -188,38 +178,8 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
               ),
             ),
           ),
-
-          // Event log
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey[200],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Last Event:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(_lastEvent, style: const TextStyle(fontSize: 12)),
-              ],
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  IconData _getDeviceIcon(AudioDeviceType type) {
-    switch (type) {
-      case AudioDeviceType.speaker:
-        return Icons.volume_up;
-      case AudioDeviceType.receiver:
-        return Icons.phone_iphone;
-      case AudioDeviceType.wiredHeadset:
-        return Icons.headset;
-      case AudioDeviceType.bluetooth:
-        return Icons.bluetooth_audio;
-    }
   }
 }

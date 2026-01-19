@@ -82,7 +82,7 @@ class AudioOutputSelector extends StatelessWidget {
                 creationParams: {
                   'width': effectiveWidth,
                   'height': effectiveHeight,
-                  'transparent': true, // No visible icon, just tap handler
+                  'transparent': true,
                 },
                 creationParamsCodec: const StandardMessageCodec(),
               ),
@@ -98,42 +98,5 @@ class AudioOutputSelector extends StatelessWidget {
       height: effectiveHeight,
       child: Center(child: child),
     );
-  }
-}
-
-/// Legacy widget that uses MethodChannel approach.
-///
-/// **Note:** This approach cannot show the native UIMenu because UIMenu
-/// requires a real user tap on a UIKit view. Use [AudioOutputSelector] instead.
-@Deprecated('Use AudioOutputSelector instead for proper UIMenu support')
-class AudioOutputSelectorLegacy extends StatelessWidget {
-  /// The child widget to wrap.
-  final Widget child;
-
-  /// Creates an [AudioOutputSelectorLegacy] widget.
-  const AudioOutputSelectorLegacy({super.key, required this.child});
-
-  static const MethodChannel _channel = MethodChannel('output_route_selector');
-
-  Future<void> _showNativeMenu(BuildContext context) async {
-    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-
-    final Offset position = renderBox.localToGlobal(Offset.zero);
-    final Size size = renderBox.size;
-
-    final double x = position.dx + (size.width / 2);
-    final double y = position.dy + (size.height / 2);
-
-    try {
-      await _channel.invokeMethod('showAudioOutputMenu', {'x': x, 'y': y});
-    } on PlatformException catch (e) {
-      debugPrint('Error showing audio output menu: ${e.message}');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(onTap: () => _showNativeMenu(context), child: child);
   }
 }

@@ -1,92 +1,26 @@
 import 'package:flutter/services.dart';
 import 'audio_model.dart';
 
-/// Platform service for managing audio output route selection.
+/// Platform service for listening to audio output route changes.
+///
+/// This class provides a stream of events when the audio output route changes.
+/// All audio output selection is handled natively via the [AudioOutputSelector] widget.
 class OutputRouteSelector {
-  static const MethodChannel _channel =
-      MethodChannel('output_route_selector');
-  
   static const EventChannel _eventChannel =
       EventChannel('output_route_selector/events');
-  
+
   static Stream<AudioRouteChangeEvent>? _eventStream;
-
-  /// Get the list of available audio output devices.
-  ///
-  /// Returns a list of [AudioModel] objects representing all available
-  /// audio output devices, including their current active state.
-  ///
-  /// Example:
-  /// ```dart
-  /// final devices = await OutputRouteSelector.getAvailableAudioOutputs();
-  /// for (final device in devices) {
-  ///   print('${device.outputName}: ${device.isActive}');
-  /// }
-  /// ```
-  static Future<List<AudioModel>> getAvailableAudioOutputs() async {
-    try {
-      final result = await _channel.invokeMethod<List<dynamic>>(
-        'getAvailableAudioOutputs',
-      );
-
-      if (result == null) {
-        return [];
-      }
-
-      return result.map((item) {
-        final jsonModel = AudioModel.fromJson(
-          Map<String, dynamic>.from(item as Map),
-        );
-        return jsonModel;
-      }).toList();
-    } on PlatformException catch (e) {
-      throw PlatformException(
-        code: e.code,
-        message: 'Failed to get available audio outputs: ${e.message}',
-        details: e.details,
-      );
-    }
-  }
-
-  /// Change the audio output route to the specified device.
-  ///
-  /// [deviceModel] - The audio device model to switch to. The device's
-  /// title will be used to identify which output to activate.
-  ///
-  /// Throws [PlatformException] if the device is not found or if there's
-  /// an error changing the audio route.
-  ///
-  /// Example:
-  /// ```dart
-  /// final devices = await OutputRouteSelector.getAvailableAudioOutputs();
-  /// final speaker = devices.firstWhere((d) => d.deviceType == AudioDeviceType.speaker);
-  /// await OutputRouteSelector.changeAudioOutput(speaker);
-  /// ```
-  static Future<void> changeAudioOutput(AudioModel deviceModel) async {
-    try {
-      await _channel.invokeMethod<void>(
-        'changeAudioOutput',
-        {'deviceTitle': deviceModel.title},
-      );
-    } on PlatformException catch (e) {
-      throw PlatformException(
-        code: e.code,
-        message: 'Failed to change audio output: ${e.message}',
-        details: e.details,
-      );
-    }
-  }
 
   /// Listen to audio route change events.
   ///
   /// Returns a stream of [AudioRouteChangeEvent] objects that notify when
-  /// the audio output route changes (e.g., user switches from Control Center,
+  /// the audio output route changes (e.g., user selects from native menu,
   /// connects/disconnects Bluetooth device, plugs in headphones).
   ///
   /// Example:
   /// ```dart
   /// OutputRouteSelector.onAudioRouteChanged.listen((event) {
-  ///   print('Audio route changed: ${event.reason}');
+  ///   print('Audio route changed: ${event.reasonDescription}');
   ///   if (event.activeDevice != null) {
   ///     print('Active device: ${event.activeDevice!.outputName}');
   ///   }
@@ -104,7 +38,7 @@ class OutputRouteSelector {
 
 /// Event emitted when the audio route changes.
 class AudioRouteChangeEvent {
-  /// The event type (always "audioRouteChanged")
+  /// The event type (e.g., "audioRouteChanged", "audioOutputsRefreshed")
   final String event;
 
   /// The reason for the route change (iOS AVAudioSession.RouteChangeReason)
@@ -117,14 +51,14 @@ class AudioRouteChangeEvent {
   /// - 6: Wake from sleep
   /// - 7: No suitable route for category
   /// - 8: Route configuration change
-  final int reason;
+  final int? reason;
 
   /// The currently active device after the route change (if available)
   final AudioModel? activeDevice;
 
   AudioRouteChangeEvent({
     required this.event,
-    required this.reason,
+    this.reason,
     this.activeDevice,
   });
 
@@ -138,13 +72,15 @@ class AudioRouteChangeEvent {
 
     return AudioRouteChangeEvent(
       event: map['event'] as String,
-      reason: map['reason'] as int,
+      reason: map['reason'] as int?,
       activeDevice: device,
     );
   }
 
   /// Returns a user-friendly description of the route change reason.
   String get reasonDescription {
+    if (reason == null) return 'Refresh';
+    
     switch (reason) {
       case 1:
         return 'Unknown';
