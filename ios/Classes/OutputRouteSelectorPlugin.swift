@@ -284,6 +284,7 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 } else {
                     // No device detected - don't send event without activeDevice
                     self.logger.warning("⚠️ Audio route changed but no active device detected after \(maxAttempts) attempts")
+                }
             } else if attempt < maxAttempts {
                 // If no device detected yet, retry
                 self.logger.info("⚠️ No active device detected, retrying... (attempt \(attempt)/\(maxAttempts))")
