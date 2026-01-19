@@ -114,23 +114,14 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     
     fun getAudioManager(): AudioManager = audioManager
     
-    /// Show the audio output selection dialog
+    /// Show the audio output selection dialog (WhatsApp style)
     fun showAudioOutputDialog() {
         activity?.let { act ->
             handler.post {
                 try {
-                    val selector = MediaRouteSelector.Builder()
-                        .addControlCategory(MediaControlIntent.CATEGORY_LIVE_AUDIO)
-                        .build()
-                    
-                    // Use themed context to avoid translucent background error
-                    val themedContext = android.view.ContextThemeWrapper(
-                        act,
-                        androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog
-                    )
-                    
-                    val dialog = androidx.mediarouter.app.MediaRouteChooserDialog(themedContext)
-                    dialog.routeSelector = selector
+                    val dialog = AudioOutputDialog(act, audioManager) { title, deviceType ->
+                        switchAudioOutput(title, deviceType)
+                    }
                     dialog.show()
                     Log.d(TAG, "Audio output dialog shown")
                 } catch (e: Exception) {
