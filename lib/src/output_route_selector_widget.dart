@@ -17,13 +17,9 @@ class AudioOutputSelector extends StatelessWidget {
   final Widget child;
 
   /// Creates an [AudioOutputSelector] widget.
-  const AudioOutputSelector({
-    super.key,
-    required this.child,
-  });
+  const AudioOutputSelector({super.key, required this.child});
 
-  static const MethodChannel _channel =
-      MethodChannel('output_route_selector');
+  static const MethodChannel _channel = MethodChannel('output_route_selector');
 
   Future<void> _showNativeMenu(BuildContext context) async {
     // Get the position of the widget on screen
@@ -38,10 +34,7 @@ class AudioOutputSelector extends StatelessWidget {
     final double y = position.dy + (size.height / 2);
 
     try {
-      await _channel.invokeMethod('showAudioOutputMenu', {
-        'x': x,
-        'y': y,
-      });
+      await _channel.invokeMethod('showAudioOutputMenu', {'x': x, 'y': y});
     } on PlatformException catch (e) {
       debugPrint('Error showing audio output menu: ${e.message}');
     }
@@ -49,9 +42,6 @@ class AudioOutputSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _showNativeMenu(context),
-      child: child,
-    );
+    return InkWell(onTap: () => _showNativeMenu(context), child: child);
   }
 }

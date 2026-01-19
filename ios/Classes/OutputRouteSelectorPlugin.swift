@@ -244,7 +244,6 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         result(nil)
     }
     
-    @available(iOS 14.0, *)
     private func showNativeMenu(at point: CGPoint) {
         // Get available audio outputs
         let session = AVAudioSession.sharedInstance()
@@ -256,65 +255,6 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
             isBluetoothDevice(output.portType) ? output.uid : nil
         })
         
-        var menuActions: [UIAction] = []
-        
-        // Add speaker option
-        let isSpeakerActive = activeOutputTypes.contains(.builtInSpeaker)
-        let speakerAction = UIAction(
-            title: "Speaker",
-            image: nil,
-            state: isSpeakerActive ? .on : .off
-        ) { [weak self] _ in
-            self?.selectAudioOutput(title: "speaker")
-        }
-        menuActions.append(speakerAction)
-        
-        // Add receiver option (iPhone only)
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            let isReceiverActive = activeOutputTypes.contains(.builtInReceiver)
-            let receiverAction = UIAction(
-                title: "iPhone",
-                image: nil,
-                state: isReceiverActive ? .on : .off
-            ) { [weak self] _ in
-                self?.selectAudioOutput(title: "receiver")
-            }
-            menuActions.append(receiverAction)
-        }
-        
-        // Add wired headset if present
-        let hasWiredHeadset = currentRoute.outputs.contains { output in
-            output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
-        }
-        if hasWiredHeadset {
-            let wiredAction = UIAction(
-                title: "Headphones",
-                image: nil,
-                state: .on
-            ) { [weak self] _ in
-                self?.selectAudioOutput(title: "wiredHeadset")
-            }
-            menuActions.append(wiredAction)
-        }
-        
-        // Add Bluetooth devices
-        if let availableInputs = session.availableInputs {
-            for input in availableInputs where isBluetoothDevice(input.portType) {
-                let isActive = activeBluetoothUIDs.contains(input.uid)
-                let bluetoothAction = UIAction(
-                    title: input.portName,
-                    image: nil,
-                    state: isActive ? .on : .off
-                ) { [weak self] _ in
-                    self?.selectAudioOutput(title: input.portName)
-                }
-                menuActions.append(bluetoothAction)
-            }
-        }
-        
-        // Create menu
-        let menu = UIMenu(title: "Audio Output", children: menuActions)
-        
         // Get the root view controller
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first,
@@ -323,27 +263,68 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
             return
         }
         
-        // Create a temporary button for UIMenu presentation
-        let sourceView = UIView(frame: CGRect(x: point.x, y: point.y, width: 1, height: 1))
-        rootViewController.view.addSubview(sourceView)
+        // Create alert controller with action sheet style
+        let alertController = UIAlertController(
+            title: "Audio Output",
+            message: nil,
+            preferredStyle: .actionSheet
+        )
         
-        // Create menu interaction
-        if #available(iOS 14.0, *) {
-            // Create a UIButton with menu
-            let menuButton = UIButton(type: .custom)
-            menuButton.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
-            menuButton.menu = menu
-            menuButton.showsMenuAsPrimaryAction = true
-            sourceView.addSubview(menuButton)
-            
-            // Programmatically trigger the menu
-            menuButton.sendActions(for: .menuActionTriggered)
-            
-            // Clean up after menu is dismissed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                sourceView.removeFromSuperview()
+        // Add speaker option
+        let isSpeakerActive = activeOutputTypes.contains(.builtInSpeaker)
+        let speakerTitle = isSpeakerActive ? "✓ Speaker" : "Speaker"
+        let speakerAction = UIAlertAction(title: speakerTitle, style: .default) { [weak self] _ in
+            self?.selectAudioOutput(title: "speaker")
+        }
+        alertController.addAction(speakerAction)
+        
+        // Add receiver option (iPhone only)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let isReceiverActive = activeOutputTypes.contains(.builtInReceiver)
+            let receiverTitle = isReceiverActive ? "✓ iPhone" : "iPhone"
+            let receiverAction = UIAlertAction(title: receiverTitle, style: .default) { [weak self] _ in
+                self?.selectAudioOutput(title: "receiver")
+            }
+            alertController.addAction(receiverAction)
+        }
+        
+        // Add wired headset if present
+        let hasWiredHeadset = currentRoute.outputs.contains { output in
+            output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
+        }
+        if hasWiredHeadset {
+            let wiredAction = UIAlertAction(title: "✓ Headphones", style: .default) { [weak self] _ in
+                self?.selectAudioOutput(title: "wiredHeadset")
+            }
+            alertController.addAction(wiredAction)
+        }
+        
+        // Add Bluetooth devices
+        if let availableInputs = session.availableInputs {
+            for input in availableInputs where isBluetoothDevice(input.portType) {
+                let isActive = activeBluetoothUIDs.contains(input.uid)
+                let bluetoothTitle = isActive ? "✓ \(input.portName)" : input.portName
+                let bluetoothAction = UIAlertAction(title: bluetoothTitle, style: .default) { [weak self] _ in
+                    self?.selectAudioOutput(title: input.portName)
+                }
+                alertController.addAction(bluetoothAction)
             }
         }
+        
+        // Add cancel button
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        alertController.addAction(cancelAction)
+        
+        // Configure popover presentation for iPad
+        if let popoverController = alertController.popoverPresentationController {
+            popoverController.sourceView = rootViewController.view
+            popoverController.sourceRect = CGRect(x: point.x, y: point.y, width: 1, height: 1)
+            popoverController.permittedArrowDirections = [.up, .down]
+        }
+        
+        // Present the alert controller
+        rootViewController.present(alertController, animated: true, completion: nil)
+        logger.info("✅ Audio output menu presented")
     }
     
     private func selectAudioOutput(title: String) {
