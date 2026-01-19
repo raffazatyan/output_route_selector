@@ -3,16 +3,19 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// A widget that shows native iOS system-style audio output selection menu.
+/// A widget that shows native audio output selection menu.
 ///
 /// Uses your custom Flutter widget as the visual, with an invisible native
-/// UIButton overlay to handle taps and show the real UIMenu.
+/// button overlay to handle taps and show the platform-specific menu.
+///
+/// **Platforms:**
+/// - **iOS**: Shows UIMenu with glass/blur effect (iOS 14+ style)
+/// - **Android**: Shows MediaRouteChooserDialog for audio output selection
 ///
 /// **Key Features:**
 /// - Use any Flutter widget as the icon (Icon, Image, AssetGenImage, etc.)
-/// - Real UIMenu with glass/blur effect (iOS 14+ style)
+/// - Native system dialogs on both platforms
 /// - Shows checkmarks for active audio output
-/// - SF Symbols icons in the menu for each device type
 /// - Automatically updates when audio route changes
 ///
 /// Example:
@@ -51,6 +54,9 @@ class AudioOutputSelector extends StatelessWidget {
   ///
   /// On iOS, this renders your [child] widget with an invisible native
   /// UIButton overlay that shows the UIMenu when tapped.
+  ///
+  /// On Android, this renders your [child] widget with an invisible native
+  /// View overlay that shows MediaRouteChooserDialog when tapped.
   ///
   /// On other platforms, it displays the [child] widget without menu functionality.
   const AudioOutputSelector({
@@ -92,7 +98,32 @@ class AudioOutputSelector extends StatelessWidget {
       );
     }
 
-    // Fallback for non-iOS platforms
+    // Use PlatformView on Android for MediaRouteChooserDialog
+    if (Platform.isAndroid) {
+      return SizedBox(
+        width: effectiveWidth,
+        height: effectiveHeight,
+        child: Stack(
+          children: [
+            // Flutter widget (your icon/image)
+            Positioned.fill(child: Center(child: child)),
+            // Invisible native view overlay for dialog trigger
+            Positioned.fill(
+              child: AndroidView(
+                viewType: 'audio_output_button',
+                creationParams: {
+                  'width': effectiveWidth,
+                  'height': effectiveHeight,
+                },
+                creationParamsCodec: const StandardMessageCodec(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Fallback for other platforms
     return SizedBox(
       width: effectiveWidth,
       height: effectiveHeight,

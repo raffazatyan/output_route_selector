@@ -175,8 +175,17 @@ class _AudioDemoState extends State<AudioDemo> {
 | Platform | Status |
 |----------|--------|
 | iOS | ✅ Full support (14.0+) |
-| Android | ❌ Not yet |
+| Android | ✅ Full support (API 21+) |
 | Web | ❌ Not applicable |
+
+## Android Setup
+
+Add to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.BLUETOOTH" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+```
 
 ## License
 
