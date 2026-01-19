@@ -6,8 +6,9 @@ import 'audio_model.dart';
 /// This class provides a stream of events when the audio output route changes.
 /// All audio output selection is handled natively via the [AudioOutputSelector] widget.
 class OutputRouteSelector {
-  static const EventChannel _eventChannel =
-      EventChannel('output_route_selector/events');
+  static const EventChannel _eventChannel = EventChannel(
+    'output_route_selector/events',
+  );
 
   static Stream<AudioRouteChangeEvent>? _eventStream;
 
@@ -27,11 +28,11 @@ class OutputRouteSelector {
   /// });
   /// ```
   static Stream<AudioRouteChangeEvent> get onAudioRouteChanged {
-    _eventStream ??= _eventChannel
-        .receiveBroadcastStream()
-        .map((event) => AudioRouteChangeEvent.fromMap(
-              Map<String, dynamic>.from(event as Map),
-            ));
+    _eventStream ??= _eventChannel.receiveBroadcastStream().map(
+      (event) => AudioRouteChangeEvent.fromMap(
+        Map<String, dynamic>.from(event as Map),
+      ),
+    );
     return _eventStream!;
   }
 }
@@ -56,11 +57,7 @@ class AudioRouteChangeEvent {
   /// The currently active device after the route change (if available)
   final AudioModel? activeDevice;
 
-  AudioRouteChangeEvent({
-    required this.event,
-    this.reason,
-    this.activeDevice,
-  });
+  AudioRouteChangeEvent({required this.event, this.reason, this.activeDevice});
 
   factory AudioRouteChangeEvent.fromMap(Map<String, dynamic> map) {
     AudioModel? device;
@@ -80,7 +77,7 @@ class AudioRouteChangeEvent {
   /// Returns a user-friendly description of the route change reason.
   String get reasonDescription {
     if (reason == null) return 'Refresh';
-    
+
     switch (reason) {
       case 1:
         return 'Unknown';

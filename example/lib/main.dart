@@ -112,10 +112,7 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                     ),
                     Text(
                       _currentDevice!.deviceType.name.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ] else
                     const Text(
@@ -158,8 +155,9 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemBuilder: (context, index) {
                               return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
                                 child: Text(
                                   _eventLog[index],
                                   style: TextStyle(
