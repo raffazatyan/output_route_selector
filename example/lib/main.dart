@@ -41,7 +41,9 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
   }
 
   void _setupRouteChangeListener() {
-    _subscription = OutputRouteSelector.onAudioRouteChanged.listen((event) {
+    _subscription = OutputRouteSelector.instance.onAudioRouteChanged.listen((
+      event,
+    ) {
       setState(() {
         _currentDevice = event.activeDevice;
         _eventLog.insert(

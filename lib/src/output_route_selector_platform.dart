@@ -5,12 +5,25 @@ import 'audio_model.dart';
 ///
 /// This class provides a stream of events when the audio output route changes.
 /// All audio output selection is handled natively via the [AudioOutputSelector] widget.
+///
+/// Usage:
+/// ```dart
+/// OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
+///   print('Active device: ${event.activeDevice?.outputName}');
+/// });
+/// ```
 class OutputRouteSelector {
-  static const EventChannel _eventChannel = EventChannel(
+  /// Singleton instance
+  static final OutputRouteSelector instance = OutputRouteSelector._();
+
+  /// Private constructor
+  OutputRouteSelector._();
+
+  final EventChannel _eventChannel = const EventChannel(
     'output_route_selector/events',
   );
 
-  static Stream<AudioRouteChangeEvent>? _eventStream;
+  Stream<AudioRouteChangeEvent>? _eventStream;
 
   /// Listen to audio route change events.
   ///
@@ -20,14 +33,14 @@ class OutputRouteSelector {
   ///
   /// Example:
   /// ```dart
-  /// OutputRouteSelector.onAudioRouteChanged.listen((event) {
+  /// OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
   ///   print('Audio route changed: ${event.reasonDescription}');
   ///   if (event.activeDevice != null) {
   ///     print('Active device: ${event.activeDevice!.outputName}');
   ///   }
   /// });
   /// ```
-  static Stream<AudioRouteChangeEvent> get onAudioRouteChanged {
+  Stream<AudioRouteChangeEvent> get onAudioRouteChanged {
     _eventStream ??= _eventChannel.receiveBroadcastStream().map(
       (event) => AudioRouteChangeEvent.fromMap(
         Map<String, dynamic>.from(event as Map),

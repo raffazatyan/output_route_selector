@@ -59,7 +59,7 @@ AudioOutputSelector(
 ### 2. Listen to Events
 
 ```dart
-OutputRouteSelector.onAudioRouteChanged.listen((event) {
+OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
   print('Event: ${event.event}');
   print('Reason: ${event.reasonDescription}');
   
@@ -89,7 +89,7 @@ class _AudioDemoState extends State<AudioDemo> {
   @override
   void initState() {
     super.initState();
-    _subscription = OutputRouteSelector.onAudioRouteChanged.listen((event) {
+    _subscription = OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
       setState(() {
         _currentDevice = event.activeDevice?.outputName ?? 'Unknown';
       });
@@ -140,8 +140,9 @@ class _AudioDemoState extends State<AudioDemo> {
 
 ### OutputRouteSelector
 
-| Method | Description |
-|--------|-------------|
+| Property | Description |
+|----------|-------------|
+| `instance` | Singleton instance |
 | `onAudioRouteChanged` | Stream of audio route change events |
 
 ### AudioRouteChangeEvent
