@@ -54,17 +54,14 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         isHandlingAudioRouteChange = true
         
         let lowercasedTitle = title.lowercased()
-        var deviceType = "bluetooth"
         
         do {
             if lowercasedTitle == "speaker" {
                 try switchToSpeaker()
-                deviceType = "speaker"
-                logger.info("✅ Switched to speaker via menu")
+                logger.info("✅ Requested switch to speaker via menu")
             } else if lowercasedTitle == "receiver" {
                 try switchToReceiver()
-                deviceType = "receiver"
-                logger.info("✅ Switched to receiver via menu")
+                logger.info("✅ Requested switch to receiver via menu")
             } else if lowercasedTitle == "wiredheadset" || lowercasedTitle == "headphones" {
                 switchToWiredHeadsetViaMenu()
                 return
@@ -74,10 +71,9 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 return
             }
             
-            // Send event with active device after successful change
+            // Check actual result after delay and send the REAL active device
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.isHandlingAudioRouteChange = false
-                self?.sendActiveDeviceEvent(title: title, deviceType: deviceType)
+                self?.sendActualActiveDevice()
             }
         } catch {
             logger.error("❌ Error switching audio output via menu: \(error.localizedDescription)")
@@ -98,11 +94,11 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         
         do {
             try session.setPreferredInput(wiredInput)
-            logger.info("✅ Switched to wired headset via menu")
+            logger.info("✅ Requested switch to wired headset via menu")
             
+            // Check actual result after delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.isHandlingAudioRouteChange = false
-                self?.sendActiveDeviceEvent(title: "wiredHeadset", deviceType: "wiredHeadset")
+                self?.sendActualActiveDevice()
             }
         } catch {
             logger.error("❌ Error setting wired headset: \(error.localizedDescription)")
@@ -123,11 +119,11 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         
         do {
             try session.setPreferredInput(bluetoothInput)
-            logger.info("✅ Switched to Bluetooth '\(deviceTitle)' via menu")
+            logger.info("✅ Requested switch to Bluetooth '\(deviceTitle)' via menu")
             
+            // Check actual result after delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.isHandlingAudioRouteChange = false
-                self?.sendActiveDeviceEvent(title: deviceTitle, deviceType: "bluetooth")
+                self?.sendActualActiveDevice()
             }
         } catch {
             logger.error("❌ Error setting Bluetooth device: \(error.localizedDescription)")
@@ -135,8 +131,40 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    /// Send event with the active device after route change
-    private func sendActiveDeviceEvent(title: String, deviceType: String) {
+    /// Get actual current audio route and send event with REAL active device
+    private func sendActualActiveDevice() {
+        let session = AVAudioSession.sharedInstance()
+        let currentRoute = session.currentRoute
+        
+        let activeOutputTypes = Set(currentRoute.outputs.map { $0.portType })
+        
+        var title: String
+        var deviceType: String
+        
+        if activeOutputTypes.contains(.builtInSpeaker) {
+            title = "speaker"
+            deviceType = "speaker"
+        } else if activeOutputTypes.contains(.builtInReceiver) {
+            title = "receiver"
+            deviceType = "receiver"
+        } else if let wiredOutput = currentRoute.outputs.first(where: { output in
+            output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
+        }) {
+            title = "wiredHeadset"
+            deviceType = "wiredHeadset"
+        } else if let bluetoothOutput = currentRoute.outputs.first(where: { output in
+            isBluetoothDevice(output.portType)
+        }) {
+            title = bluetoothOutput.portName
+            deviceType = "bluetooth"
+        } else {
+            // Fallback - shouldn't happen
+            title = "unknown"
+            deviceType = "speaker"
+        }
+        
+        isHandlingAudioRouteChange = false
+        
         sendEvent([
             "event": "audioRouteChanged",
             "activeDevice": [
@@ -145,7 +173,7 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 "deviceType": deviceType
             ]
         ])
-        logger.info("📤 Sent active device event: \(title)")
+        logger.info("📤 Sent ACTUAL active device: \(title) (type: \(deviceType))")
     }
     
     // MARK: - Helper Methods

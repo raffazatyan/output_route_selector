@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'output_route_selector'
-  s.version          = '1.1.0'
+  s.version          = '1.1.1'
   s.summary          = 'A Flutter plugin to select audio output routes on iOS devices.'
   s.description      = <<-DESC
 A Flutter plugin that allows you to select and manage audio output routes (speaker, receiver, bluetooth, wired headset) on iOS devices.
