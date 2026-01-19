@@ -54,13 +54,16 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         isHandlingAudioRouteChange = true
         
         let lowercasedTitle = title.lowercased()
+        var deviceType = "bluetooth"
         
         do {
             if lowercasedTitle == "speaker" {
                 try switchToSpeaker()
+                deviceType = "speaker"
                 logger.info("✅ Switched to speaker via menu")
             } else if lowercasedTitle == "receiver" {
                 try switchToReceiver()
+                deviceType = "receiver"
                 logger.info("✅ Switched to receiver via menu")
             } else if lowercasedTitle == "wiredheadset" || lowercasedTitle == "headphones" {
                 switchToWiredHeadsetViaMenu()
@@ -71,11 +74,10 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 return
             }
             
-            // Reset flag after delay
+            // Send event with active device after successful change
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.isHandlingAudioRouteChange = false
-                // Refresh outputs after change
-                self?.refreshAudioOutputs()
+                self?.sendActiveDeviceEvent(title: title, deviceType: deviceType)
             }
         } catch {
             logger.error("❌ Error switching audio output via menu: \(error.localizedDescription)")
@@ -100,7 +102,7 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.isHandlingAudioRouteChange = false
-                self?.refreshAudioOutputs()
+                self?.sendActiveDeviceEvent(title: "wiredHeadset", deviceType: "wiredHeadset")
             }
         } catch {
             logger.error("❌ Error setting wired headset: \(error.localizedDescription)")
@@ -125,7 +127,7 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.isHandlingAudioRouteChange = false
-                self?.refreshAudioOutputs()
+                self?.sendActiveDeviceEvent(title: deviceTitle, deviceType: "bluetooth")
             }
         } catch {
             logger.error("❌ Error setting Bluetooth device: \(error.localizedDescription)")
@@ -133,11 +135,17 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func refreshAudioOutputs() {
-        // Send event to Flutter to refresh outputs
+    /// Send event with the active device after route change
+    private func sendActiveDeviceEvent(title: String, deviceType: String) {
         sendEvent([
-            "event": "audioOutputsRefreshed"
+            "event": "audioRouteChanged",
+            "activeDevice": [
+                "title": title,
+                "isActive": true,
+                "deviceType": deviceType
+            ]
         ])
+        logger.info("📤 Sent active device event: \(title)")
     }
     
     // MARK: - Helper Methods
@@ -270,23 +278,12 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 if let device = activeDevice {
                     self.sendEvent([
                         "event": "audioRouteChanged",
-                        "reason": reason.rawValue,
                         "activeDevice": device
                     ])
                     self.logger.info("✅ Audio route changed detected (attempt \(attempt)/\(maxAttempts))")
-                    
-                    // Refresh outputs after route change detected
-                    self.refreshAudioOutputs()
                 } else {
-                    self.sendEvent([
-                        "event": "audioRouteChanged",
-                        "reason": reason.rawValue
-                    ])
+                    // No device detected - don't send event without activeDevice
                     self.logger.warning("⚠️ Audio route changed but no active device detected after \(maxAttempts) attempts")
-                    
-                    // Refresh outputs even if no device detected
-                    self.refreshAudioOutputs()
-                }
             } else if attempt < maxAttempts {
                 // If no device detected yet, retry
                 self.logger.info("⚠️ No active device detected, retrying... (attempt \(attempt)/\(maxAttempts))")
