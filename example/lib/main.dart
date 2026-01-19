@@ -30,7 +30,7 @@ class AudioOutputDemo extends StatefulWidget {
 }
 
 class _AudioOutputDemoState extends State<AudioOutputDemo> {
-  StreamSubscription<AudioRouteChangeEvent>? _subscription;
+  StreamSubscription<AudioModel?>? _subscription;
   final List<String> _eventLog = [];
   AudioModel? _currentDevice;
 
@@ -42,20 +42,21 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
 
   void _setupRouteChangeListener() {
     _subscription = OutputRouteSelector.instance.onAudioRouteChanged.listen((
-      event,
+      device,
     ) {
-      setState(() {
-        _currentDevice = event.activeDevice;
-        _eventLog.insert(
-          0,
-          '${DateTime.now().toString().substring(11, 19)} - '
-          '${event.reasonDescription}: ${event.activeDevice?.outputName ?? 'Unknown'}',
-        );
-        // Keep only last 10 events
-        if (_eventLog.length > 10) {
-          _eventLog.removeLast();
-        }
-      });
+      if (device != null) {
+        setState(() {
+          _currentDevice = device;
+          _eventLog.insert(
+            0,
+            '${DateTime.now().toString().substring(11, 19)} - ${device.outputName}',
+          );
+          // Keep only last 10 events
+          if (_eventLog.length > 10) {
+            _eventLog.removeLast();
+          }
+        });
+      }
     });
   }
 

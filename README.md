@@ -59,13 +59,10 @@ AudioOutputSelector(
 ### 2. Listen to Events
 
 ```dart
-OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
-  print('Event: ${event.event}');
-  print('Reason: ${event.reasonDescription}');
-  
-  if (event.activeDevice != null) {
-    print('Active: ${event.activeDevice!.outputName}');
-    print('Type: ${event.activeDevice!.deviceType}');
+OutputRouteSelector.instance.onAudioRouteChanged.listen((device) {
+  if (device != null) {
+    print('Active: ${device.outputName}');
+    print('Type: ${device.deviceType}');
   }
 });
 ```
@@ -83,16 +80,18 @@ class AudioDemo extends StatefulWidget {
 }
 
 class _AudioDemoState extends State<AudioDemo> {
-  StreamSubscription<AudioRouteChangeEvent>? _subscription;
+  StreamSubscription<AudioModel?>? _subscription;
   String _currentDevice = 'Unknown';
 
   @override
   void initState() {
     super.initState();
-    _subscription = OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
-      setState(() {
-        _currentDevice = event.activeDevice?.outputName ?? 'Unknown';
-      });
+    _subscription = OutputRouteSelector.instance.onAudioRouteChanged.listen((device) {
+      if (device != null) {
+        setState(() {
+          _currentDevice = device.outputName;
+        });
+      }
     });
   }
 
@@ -143,16 +142,7 @@ class _AudioDemoState extends State<AudioDemo> {
 | Property | Description |
 |----------|-------------|
 | `instance` | Singleton instance |
-| `onAudioRouteChanged` | Stream of audio route change events |
-
-### AudioRouteChangeEvent
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `event` | `String` | Event type |
-| `reason` | `int?` | iOS route change reason |
-| `activeDevice` | `AudioModel?` | Currently active device |
-| `reasonDescription` | `String` | Human-readable reason |
+| `onAudioRouteChanged` | Stream of `AudioModel?` - the active device |
 
 ### AudioModel
 

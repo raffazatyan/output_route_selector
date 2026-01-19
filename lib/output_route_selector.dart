@@ -15,8 +15,10 @@
 ///
 /// 2. Listen to audio route changes:
 /// ```dart
-/// OutputRouteSelector.instance.onAudioRouteChanged.listen((event) {
-///   print('Active device: ${event.activeDevice?.outputName}');
+/// OutputRouteSelector.instance.onAudioRouteChanged.listen((device) {
+///   if (device != null) {
+///     print('Active device: ${device.outputName}');
+///   }
 /// });
 /// ```
 ///
