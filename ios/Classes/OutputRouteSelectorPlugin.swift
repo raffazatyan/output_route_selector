@@ -439,6 +439,32 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         return portType == .bluetoothHFP || portType == .bluetoothA2DP || portType == .bluetoothLE
     }
     
+    /// Get appropriate icon for Bluetooth device based on name
+    private func getBluetoothIcon(for deviceName: String) -> UIImage? {
+        let lowercased = deviceName.lowercased()
+        
+        // AirPods use SF Symbol
+        if lowercased.contains("airpods") {
+            return UIImage(systemName: "airpodspro")
+        }
+        
+        // Other Bluetooth devices use custom SVG icon
+        // Try to load from plugin bundle first
+        if let bundlePath = Bundle(for: OutputRouteSelectorPlugin.self).path(forResource: "output_route_selector", ofType: "bundle"),
+           let bundle = Bundle(path: bundlePath),
+           let image = UIImage(named: "bluetooth_speaker", in: bundle, compatibleWith: nil) {
+            return image
+        }
+        
+        // Try to load directly from plugin bundle
+        if let image = UIImage(named: "bluetooth_speaker", in: Bundle(for: OutputRouteSelectorPlugin.self), compatibleWith: nil) {
+            return image
+        }
+        
+        // Fallback to SF Symbol
+        return UIImage(systemName: "hifispeaker.fill")
+    }
+    
     // MARK: - Audio Route Change Observer
     
     private func setupAudioRouteChangeObserver() {
@@ -669,9 +695,10 @@ extension OutputRouteSelectorPlugin {
         if let availableInputs = session.availableInputs {
             for input in availableInputs where isBluetoothDevice(input.portType) {
                 let isActive = activeBluetoothUIDs.contains(input.uid)
+                let bluetoothIcon = getBluetoothIcon(for: input.portName)
                 let bluetoothAction = UIAction(
                     title: input.portName,
-                    image: UIImage(systemName: "airpodspro"),
+                    image: bluetoothIcon,
                     state: isActive ? .on : .off
                 ) { _ in
                     onSelection(input.portName)
