@@ -40,6 +40,9 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     // Track last sent state to avoid duplicate events
     private var lastSentDeviceType: String? = null
     
+    // Reference to current dialog so we can dismiss it when widget is disposed
+    private var currentDialog: AudioOutputDialog? = null
+    
     // MediaRouter callback to detect route changes
     private val mediaRouterCallback = object : MediaRouter.Callback() {
         override fun onRouteSelected(router: MediaRouter, route: MediaRouter.RouteInfo, reason: Int) {
@@ -92,7 +95,24 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                 showAudioOutputDialog(x, y, width, height)
                 result.success(null)
             }
+            "dismissAudioOutputDialog" -> {
+                dismissAudioOutputDialog()
+                result.success(null)
+            }
             else -> result.notImplemented()
+        }
+    }
+    
+    /// Dismiss the audio output dialog if it's showing
+    private fun dismissAudioOutputDialog() {
+        handler.post {
+            currentDialog?.let { dialog ->
+                if (dialog.isShowing) {
+                    dialog.dismiss()
+                    Log.d(TAG, "Audio output dialog dismissed")
+                }
+            }
+            currentDialog = null
         }
     }
     
@@ -269,16 +289,28 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
         activity?.let { act ->
             handler.post {
                 try {
+                    // Dismiss any existing dialog first
+                    currentDialog?.dismiss()
+                    
                     val dialog = AudioOutputDialog(
                         act, 
                         audioManager,
                         anchorX,
                         anchorY,
                         anchorWidth,
-                        anchorHeight
-                    ) { title, deviceType ->
-                        switchAudioOutput(title, deviceType)
-                    }
+                        anchorHeight,
+                        onDeviceSelected = { title, deviceType ->
+                            switchAudioOutput(title, deviceType)
+                        },
+                        onDialogDismissed = {
+                            // Clear reference when dialog is dismissed
+                            currentDialog = null
+                        }
+                    )
+                    
+                    // Save reference so we can dismiss it later
+                    currentDialog = dialog
+                    
                     dialog.show()
                     Log.d(TAG, "Audio output dialog shown at ($anchorX, $anchorY)")
                 } catch (e: Exception) {

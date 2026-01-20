@@ -159,6 +159,13 @@ class _AndroidAudioOutputSelectorState
   /// Key used to find widget's position on screen.
   final GlobalKey _key = GlobalKey();
 
+  @override
+  void dispose() {
+    // Close the dialog when widget is disposed (e.g., screen popped).
+    _methodChannel.invokeMethod('dismissAudioOutputDialog');
+    super.dispose();
+  }
+
   /// Shows the native Android audio output dialog.
   /// Calculates widget position and passes it to native code
   /// so the dialog can appear near the button.

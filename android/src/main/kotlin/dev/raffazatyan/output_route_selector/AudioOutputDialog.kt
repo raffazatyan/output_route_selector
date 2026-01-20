@@ -33,7 +33,8 @@ class AudioOutputDialog(
     private val anchorY: Int,
     private val anchorWidth: Int,
     private val anchorHeight: Int,
-    private val onDeviceSelected: (title: String, deviceType: String) -> Unit
+    private val onDeviceSelected: (title: String, deviceType: String) -> Unit,
+    private val onDialogDismissed: (() -> Unit)? = null
 ) : Dialog(context) {
 
     private val items = mutableListOf<AudioOutputItem>()
@@ -110,6 +111,7 @@ class AudioOutputDialog(
         setOnDismissListener {
             stopPolling()
             unregisterAudioRouteReceiver()
+            onDialogDismissed?.invoke()
         }
     }
     
