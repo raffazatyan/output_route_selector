@@ -1,6 +1,5 @@
-# Changelog
 
-## [2.0.0] - 2026-01-20
+## [2.1.0] - 2026-01-20
 
 ### Added
 - Auto-sizing: Widget automatically takes the size of its child (no need to specify width/height)

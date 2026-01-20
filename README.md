@@ -29,7 +29,7 @@ To use this plugin effectively on iOS, make sure your app is playing or recordin
 
 ```yaml
 dependencies:
-  output_route_selector: ^2.0.0
+  output_route_selector: ^2.1.0
 ```
 
 ## iOS Setup
@@ -202,40 +202,6 @@ Add to your `AndroidManifest.xml`:
 ```xml
 <uses-permission android:name="android.permission.BLUETOOTH" />
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-```
-
-## Adding Demo Media to README
-
-You can add GIFs or videos to showcase how the plugin works:
-
-### Option 1: GIF (recommended for GitHub)
-
-1. Record your screen (iOS Simulator or Android Emulator)
-2. Convert to GIF using tools like:
-   - [EZGIF](https://ezgif.com/video-to-gif) (online)
-   - [Gifski](https://gif.ski/) (macOS)
-   - `ffmpeg -i video.mp4 -vf "fps=15,scale=300:-1" demo.gif`
-3. Add to your repo (e.g., `assets/demo.gif`)
-4. Reference in README:
-   ```markdown
-   ![Demo](assets/demo.gif)
-   ```
-
-### Option 2: Video (GitHub supports mp4)
-
-1. Record your screen
-2. Keep it short (under 10MB for GitHub)
-3. Add to your repo
-4. Reference in README:
-   ```markdown
-   https://github.com/user/repo/assets/demo.mp4
-   ```
-
-### Option 3: Video hosted externally
-
-Upload to YouTube/Vimeo and embed a thumbnail with link:
-```markdown
-[![Demo Video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=VIDEO_ID)
 ```
 
 ## License
