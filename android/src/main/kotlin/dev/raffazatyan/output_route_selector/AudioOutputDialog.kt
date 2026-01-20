@@ -24,6 +24,7 @@ import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.graphics.drawable.DrawableCompat
 
 class AudioOutputDialog(
     context: Context,
@@ -41,6 +42,13 @@ class AudioOutputDialog(
     private var audioRouteReceiver: BroadcastReceiver? = null
     private var pollingRunnable: Runnable? = null
     private var lastDeviceState: String = ""
+    
+    // Theme colors
+    private val isDarkMode: Boolean
+    private val backgroundColor: Int
+    private val textColor: Int
+    private val rippleColor: Int
+    private val iconTintColor: Int
 
     data class AudioOutputItem(
         val title: String,
@@ -52,10 +60,35 @@ class AudioOutputDialog(
 
     init {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         
-        // Remove background dim
-        window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        // Make window fully transparent
+        window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            // Remove any window decorations that might add borders
+            decorView.setBackgroundColor(Color.TRANSPARENT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                // Disable default dialog elevation/shadow
+                setElevation(0f)
+            }
+        }
+        
+        // Detect dark mode
+        val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        isDarkMode = nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        
+        // Set colors based on theme
+        if (isDarkMode) {
+            backgroundColor = Color.parseColor("#303030")  // Dark gray
+            textColor = Color.WHITE
+            rippleColor = Color.parseColor("#505050")
+            iconTintColor = Color.WHITE
+        } else {
+            backgroundColor = Color.parseColor("#F7F7F7")  // Light gray background
+            textColor = Color.BLACK  // Black text
+            rippleColor = Color.parseColor("#E0E0E0")
+            iconTintColor = Color.BLACK  // Black icons
+        }
         
         buildDeviceList()
         containerView = createDialogView()
@@ -332,13 +365,17 @@ class AudioOutputDialog(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             
-            // Dark background with rounded corners (popup style)
+            // Background with rounded corners (adapts to theme)
+            val cornerRadius = dp(12).toFloat()
             val bgDrawable = GradientDrawable().apply {
-                setColor(Color.parseColor("#303030"))
-                cornerRadius = dp(12).toFloat()
+                setColor(backgroundColor)
+                this.cornerRadius = cornerRadius
             }
             background = bgDrawable
-            elevation = dp(8).toFloat()
+            
+            // No elevation - cleaner look without shadow artifacts
+            elevation = 0f
+            
             setPadding(dp(4), dp(8), dp(4), dp(8))
         }
 
@@ -360,9 +397,9 @@ class AudioOutputDialog(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(6), dp(12), dp(6))
             
-            // Gray ripple effect
+            // Ripple effect (adapts to theme)
             val rippleDrawable = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#505050")),
+                android.content.res.ColorStateList.valueOf(rippleColor),
                 null,
                 android.graphics.drawable.ColorDrawable(Color.WHITE)
             )
@@ -393,6 +430,8 @@ class AudioOutputDialog(
                 else -> R.drawable.ic_phone_speaker
             }
             setImageResource(iconRes)
+            // Tint icon based on theme
+            DrawableCompat.setTint(drawable, iconTintColor)
         }
         itemLayout.addView(iconView)
 
@@ -404,7 +443,7 @@ class AudioOutputDialog(
                 1f
             )
             text = item.displayTitle
-            setTextColor(Color.WHITE)
+            setTextColor(textColor)
             textSize = 14f
         }
         itemLayout.addView(titleView)
@@ -414,6 +453,8 @@ class AudioOutputDialog(
             val checkView = ImageView(context).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
                 setImageResource(R.drawable.ic_checkmark)
+                // Tint checkmark based on theme
+                DrawableCompat.setTint(drawable, iconTintColor)
             }
             itemLayout.addView(checkView)
         }
