@@ -44,8 +44,9 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     private val mediaRouterCallback = object : MediaRouter.Callback() {
         override fun onRouteSelected(router: MediaRouter, route: MediaRouter.RouteInfo, reason: Int) {
             super.onRouteSelected(router, route, reason)
-            Log.d(TAG, "Route selected: ${route.name}")
-            sendDeviceEvent(route.name, getDeviceType(route))
+            Log.d(TAG, "Route selected: ${route.name} (ignored, using checkAndSendCurrentRoute)")
+            // Don't send event directly - use checkAndSendCurrentRoute to get actual state
+            handler.postDelayed({ checkAndSendCurrentRoute() }, 200)
         }
         
         override fun onRouteChanged(router: MediaRouter, route: MediaRouter.RouteInfo) {
@@ -118,6 +119,9 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         eventSink = events
         Log.d(TAG, "Event stream listener registered")
+        
+        // Send current audio route immediately after listener is registered
+        handler.postDelayed({ sendCurrentRoute() }, 100)
     }
     
     override fun onCancel(arguments: Any?) {
@@ -154,9 +158,12 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                         Log.d(TAG, "Headset plug state: $state")
                         handler.postDelayed({ checkAndSendCurrentRoute() }, 100)
                     }
-                    BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED -> {
-                        Log.d(TAG, "Bluetooth connection state changed")
-                        handler.postDelayed({ checkAndSendCurrentRoute() }, 100)
+                    BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED,
+                    "android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED",
+                    "android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED" -> {
+                        Log.d(TAG, "Bluetooth connection state changed: ${intent.action}")
+                        // Longer delay for Bluetooth disconnect to propagate
+                        handler.postDelayed({ checkAndSendCurrentRoute() }, 300)
                     }
                 }
             }
@@ -167,10 +174,13 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
             addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
             addAction(AudioManager.ACTION_HEADSET_PLUG)
             addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
+            addAction("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED")
+            addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
         }
         
+        // RECEIVER_EXPORTED is required to receive system broadcasts on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(audioRouteReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            context.registerReceiver(audioRouteReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             context.registerReceiver(audioRouteReceiver, filter)
         }
@@ -189,8 +199,8 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
         audioRouteReceiver = null
     }
     
-    /// Check current audio route and send event if changed
-    private fun checkAndSendCurrentRoute() {
+    /// Get current audio route info
+    private fun getCurrentRoute(): Pair<String, String> {
         val isSpeakerOn = audioManager.isSpeakerphoneOn
         val isBluetoothScoOn = audioManager.isBluetoothScoOn
         val isWiredOn = audioManager.isWiredHeadsetOn
@@ -226,6 +236,21 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                 deviceType = "receiver"
             }
         }
+        
+        return Pair(title, deviceType)
+    }
+    
+    /// Send current audio route immediately (for initial state)
+    private fun sendCurrentRoute() {
+        val (title, deviceType) = getCurrentRoute()
+        lastSentDeviceType = deviceType
+        sendDeviceEvent(title, deviceType)
+        Log.d(TAG, "Sent initial route: $title (type: $deviceType)")
+    }
+    
+    /// Check current audio route and send event if changed
+    private fun checkAndSendCurrentRoute() {
+        val (title, deviceType) = getCurrentRoute()
         
         // Only send if changed
         if (deviceType != lastSentDeviceType) {

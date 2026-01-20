@@ -1,13 +1,19 @@
 package dev.raffazatyan.output_route_selector
 
 import android.app.Dialog
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
@@ -30,6 +36,11 @@ class AudioOutputDialog(
 ) : Dialog(context) {
 
     private val items = mutableListOf<AudioOutputItem>()
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var containerView: LinearLayout
+    private var audioRouteReceiver: BroadcastReceiver? = null
+    private var pollingRunnable: Runnable? = null
+    private var lastDeviceState: String = ""
 
     data class AudioOutputItem(
         val title: String,
@@ -47,9 +58,135 @@ class AudioOutputDialog(
         window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         
         buildDeviceList()
-        setContentView(createDialogView())
+        containerView = createDialogView()
+        setContentView(containerView)
         
         // Position dialog near the anchor button
+        positionDialog()
+        
+        // Register receiver to update dialog when audio route changes
+        registerAudioRouteReceiver()
+        
+        // Start polling for device changes (backup for missed broadcasts)
+        startPolling()
+        
+        // Save initial state
+        lastDeviceState = getCurrentDeviceState()
+        
+        // Unregister when dialog is dismissed
+        setOnDismissListener {
+            stopPolling()
+            unregisterAudioRouteReceiver()
+        }
+    }
+    
+    private fun getCurrentDeviceState(): String {
+        val isSpeakerOn = audioManager.isSpeakerphoneOn
+        val isBluetoothScoOn = audioManager.isBluetoothScoOn
+        val isWiredOn = audioManager.isWiredHeadsetOn
+        
+        // Build a string representing current state including connected Bluetooth devices
+        val sb = StringBuilder()
+        sb.append("spk=$isSpeakerOn,bt=$isBluetoothScoOn,wired=$isWiredOn")
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val audioDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            for (device in audioDevices) {
+                if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                    sb.append(",bt_dev=${device.productName}")
+                }
+            }
+        }
+        
+        return sb.toString()
+    }
+    
+    private fun startPolling() {
+        pollingRunnable = object : Runnable {
+            override fun run() {
+                if (!isShowing) return
+                
+                val currentState = getCurrentDeviceState()
+                if (currentState != lastDeviceState) {
+                    android.util.Log.d("AudioOutputDialog", "State changed: $lastDeviceState -> $currentState")
+                    lastDeviceState = currentState
+                    refreshDialogContent()
+                }
+                
+                // Check every 300ms
+                handler.postDelayed(this, 300)
+            }
+        }
+        handler.postDelayed(pollingRunnable!!, 300)
+    }
+    
+    private fun stopPolling() {
+        pollingRunnable?.let { handler.removeCallbacks(it) }
+        pollingRunnable = null
+    }
+    
+    private fun registerAudioRouteReceiver() {
+        audioRouteReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                android.util.Log.d("AudioOutputDialog", "Received broadcast: ${intent?.action}")
+                // Rebuild and refresh the dialog content
+                handler.postDelayed({ refreshDialogContent() }, 200)
+            }
+        }
+        
+        val filter = IntentFilter().apply {
+            addAction(AudioManager.ACTION_SPEAKERPHONE_STATE_CHANGED)
+            addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
+            addAction(AudioManager.ACTION_HEADSET_PLUG)
+            addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
+            addAction("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED")
+            addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
+        }
+        
+        // RECEIVER_EXPORTED is required to receive system broadcasts on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(audioRouteReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(audioRouteReceiver, filter)
+        }
+        android.util.Log.d("AudioOutputDialog", "Audio route receiver registered")
+    }
+    
+    private fun unregisterAudioRouteReceiver() {
+        audioRouteReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+            } catch (e: Exception) {
+                // Already unregistered
+            }
+        }
+        audioRouteReceiver = null
+    }
+    
+    private fun refreshDialogContent() {
+        if (!isShowing) return
+        
+        // Rebuild device list
+        buildDeviceList()
+        
+        // Clear and rebuild UI
+        containerView.removeAllViews()
+        
+        val dp = { value: Int -> 
+            TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 
+                value.toFloat(), 
+                context.resources.displayMetrics
+            ).toInt()
+        }
+        
+        // Add items
+        for (item in items) {
+            containerView.addView(createItemView(item, dp))
+        }
+        
+        // Reposition in case item count changed
         positionDialog()
     }
     
@@ -178,7 +315,7 @@ class AudioOutputDialog(
         }
     }
 
-    private fun createDialogView(): View {
+    private fun createDialogView(): LinearLayout {
         val dp = { value: Int -> 
             TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 

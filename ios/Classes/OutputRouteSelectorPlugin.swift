@@ -336,6 +336,12 @@ extension OutputRouteSelectorPlugin: FlutterStreamHandler {
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         self.eventSink = events
         logger.info("✅ Event stream listener registered")
+        
+        // Send current audio route immediately after listener is registered
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.sendActualActiveDevice()
+        }
+        
         return nil
     }
     
