@@ -20,11 +20,25 @@ class AudioModel {
   });
 
   /// Creates an [AudioModel] from a JSON map.
+  /// If the device is bluetooth and title contains "airpods", deviceType will be airpods.
   factory AudioModel.fromJson(Map<String, dynamic> json) {
+    final title = json['title'] as String;
+    final typeString = json['deviceType'] as String;
+
+    // Check if it's AirPods based on device name.
+    AudioDeviceType deviceType;
+    if (typeString.toLowerCase() == 'bluetooth' &&
+        title.toLowerCase().contains('airpods')) {
+      // AirPods detected by name.
+      deviceType = AudioDeviceType.airpods;
+    } else {
+      deviceType = _deviceTypeFromString(typeString);
+    }
+
     return AudioModel(
-      title: json['title'] as String,
+      title: title,
       isActive: json['isActive'] as bool,
-      deviceType: _deviceTypeFromString(json['deviceType'] as String),
+      deviceType: deviceType,
     );
   }
 
@@ -75,6 +89,8 @@ class AudioModel {
         return 'wiredHeadset';
       case AudioDeviceType.bluetooth:
         return 'bluetooth';
+      case AudioDeviceType.airpods:
+        return 'airpods';
     }
   }
 
@@ -110,8 +126,9 @@ extension AudioModelExtension on AudioModel {
     };
   }
 
-  /// Returns true if the device is a wired headset or bluetooth device.
+  /// Returns true if the device is a wired headset, bluetooth, or airpods.
   bool get hasOtherConnection =>
       deviceType == AudioDeviceType.wiredHeadset ||
-      deviceType == AudioDeviceType.bluetooth;
+      deviceType == AudioDeviceType.bluetooth ||
+      deviceType == AudioDeviceType.airpods;
 }

@@ -89,7 +89,6 @@ class _AudioOutputDemoState extends State<AudioOutputDemo> {
                   const SizedBox(height: 16),
                   // Native iOS button with UIMenu
                   AudioOutputSelector(
-                    size: 64,
                     child: Container(
                       width: 64,
                       height: 64,

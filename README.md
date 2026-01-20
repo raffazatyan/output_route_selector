@@ -1,15 +1,29 @@
 # Output Route Selector
 
-A Flutter plugin that provides native iOS audio output selection with a system-style UIMenu.
+A Flutter plugin that provides native audio output selection UI for iOS and Android.
+
+## Demo
+
+| iOS | Android |
+|:---:|:-------:|
+| ![iOS Demo](ios-guide.gif) | ![Android Demo](android-guide.gif) |
 
 ## Features
 
-- **Native UIMenu** - Real iOS system menu with glass/blur effect
+- **Native UI** - iOS UIMenu with blur effect, Android popup dialog
 - **Automatic device detection** - Speaker, Receiver, Bluetooth, Wired Headset
-- **SF Symbols icons** - AirPods, speaker, iPhone, headphones icons
-- **Custom Bluetooth icon** - SVG support for non-AirPods devices
-- **Real-time events** - Stream notifications when audio route changes
-- **Zero Flutter-side management** - All device handling is native
+- **Native icons** - SF Symbols on iOS, Material icons on Android
+- **Real-time updates** - Stream notifications when audio route changes
+- **Theme support** - Light/Dark mode on Android
+- **Live dialog updates** - Android dialog updates in real-time when devices connect/disconnect
+
+## Important Notes
+
+### iOS Audio Session Sandbox
+
+On iOS, this plugin can only control audio routes for audio sessions created by your app. You cannot control audio from other applications (e.g., Spotify, Apple Music). This is an iOS system limitation - each app has its own audio session sandbox.
+
+To use this plugin effectively on iOS, make sure your app is playing or recording audio using AVAudioSession.
 
 ## Installation
 
@@ -36,23 +50,27 @@ Minimum iOS version: **14.0**
 ```dart
 import 'package:output_route_selector/output_route_selector.dart';
 
-// Simple usage
+// With Icon
 AudioOutputSelector(
-  size: 44,
   child: Icon(Icons.volume_up, size: 24),
-)
-
-// With custom dimensions
-AudioOutputSelector(
-  width: 50,
-  height: 50,
-  child: Icon(Icons.speaker, size: 30, color: Colors.blue),
 )
 
 // With AssetGenImage
 AudioOutputSelector(
-  size: 44,
   child: Assets.icons.speaker.image(width: 24, height: 24),
+)
+
+// With custom widget
+AudioOutputSelector(
+  child: Container(
+    width: 44,
+    height: 44,
+    decoration: BoxDecoration(
+      color: Colors.blue.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(22),
+    ),
+    child: Icon(Icons.speaker, color: Colors.blue),
+  ),
 )
 ```
 
@@ -130,12 +148,11 @@ class _AudioDemoState extends State<AudioDemo> {
 
 ### AudioOutputSelector
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `child` | `Widget` | required | The widget to display as button |
-| `width` | `double` | 44 | Button width |
-| `height` | `double` | 44 | Button height |
-| `size` | `double?` | null | Shorthand for width & height |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `child` | `Widget` | The widget to display as button |
+
+The widget automatically takes the size of its child.
 
 ### OutputRouteSelector
 
@@ -172,11 +189,11 @@ class _AudioDemoState extends State<AudioDemo> {
 
 ## Platform Support
 
-| Platform | Status |
-|----------|--------|
-| iOS | ✅ Full support (14.0+) |
-| Android | ✅ Full support (API 21+) |
-| Web | ❌ Not applicable |
+| Platform | Status | Notes |
+|----------|--------|-------|
+| iOS | ✅ Full support (14.0+) | Native UIMenu |
+| Android | ✅ Full support (API 23+) | Native popup dialog |
+| Web | ❌ Not supported | N/A |
 
 ## Android Setup
 
@@ -185,6 +202,40 @@ Add to your `AndroidManifest.xml`:
 ```xml
 <uses-permission android:name="android.permission.BLUETOOTH" />
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+```
+
+## Adding Demo Media to README
+
+You can add GIFs or videos to showcase how the plugin works:
+
+### Option 1: GIF (recommended for GitHub)
+
+1. Record your screen (iOS Simulator or Android Emulator)
+2. Convert to GIF using tools like:
+   - [EZGIF](https://ezgif.com/video-to-gif) (online)
+   - [Gifski](https://gif.ski/) (macOS)
+   - `ffmpeg -i video.mp4 -vf "fps=15,scale=300:-1" demo.gif`
+3. Add to your repo (e.g., `assets/demo.gif`)
+4. Reference in README:
+   ```markdown
+   ![Demo](assets/demo.gif)
+   ```
+
+### Option 2: Video (GitHub supports mp4)
+
+1. Record your screen
+2. Keep it short (under 10MB for GitHub)
+3. Add to your repo
+4. Reference in README:
+   ```markdown
+   https://github.com/user/repo/assets/demo.mp4
+   ```
+
+### Option 3: Video hosted externally
+
+Upload to YouTube/Vimeo and embed a thumbnail with link:
+```markdown
+[![Demo Video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=VIDEO_ID)
 ```
 
 ## License
