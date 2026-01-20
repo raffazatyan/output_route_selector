@@ -1,6 +1,6 @@
 name: output_route_selector
 description: A Flutter plugin to select audio output routes (speaker, receiver, bluetooth, wired headset) on iOS and Android.
-version: 2.0.1
+version: 2.1.0
 homepage: https://github.com/raffazatyan/output_route_selector
 repository: https://github.com/raffazatyan/output_route_selector
 
