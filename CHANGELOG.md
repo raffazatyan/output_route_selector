@@ -1,3 +1,7 @@
+## [2.1.1] - 2026-01-20
+
+### Fixed
+- Android: Events now report the actual device state after switch attempt, not the requested state. This fixes the issue where switching to receiver while wired headphones are connected would send a "receiver" event even though the system couldn't switch (it would stay on wiredHeadset).
 
 ## [2.1.0] - 2026-01-20
 

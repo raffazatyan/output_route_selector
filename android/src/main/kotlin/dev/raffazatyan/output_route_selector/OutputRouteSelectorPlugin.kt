@@ -393,24 +393,17 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     fun switchAudioOutput(deviceTitle: String, deviceType: String) {
         handler.post {
             try {
-                var actualTitle = deviceTitle
-                var actualType = deviceType
-                
                 when (deviceType) {
                     "speaker" -> {
                         audioManager.stopBluetoothSco()
                         audioManager.isBluetoothScoOn = false
                         audioManager.isSpeakerphoneOn = true
-                        actualTitle = "speaker"
-                        actualType = "speaker"
                         Log.d(TAG, "Set speaker ON, bluetooth OFF")
                     }
                     "receiver" -> {
                         audioManager.stopBluetoothSco()
                         audioManager.isBluetoothScoOn = false
                         audioManager.isSpeakerphoneOn = false
-                        actualTitle = "receiver"
-                        actualType = "receiver"
                         Log.d(TAG, "Set speaker OFF, bluetooth OFF (receiver)")
                     }
                     "bluetooth" -> {
@@ -423,14 +416,16 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                         audioManager.stopBluetoothSco()
                         audioManager.isBluetoothScoOn = false
                         audioManager.isSpeakerphoneOn = false
-                        actualTitle = "wiredHeadset"
-                        actualType = "wiredHeadset"
                         Log.d(TAG, "Set speaker OFF, bluetooth OFF (wired)")
                     }
                 }
                 
-                // Send event with what we set
+                // Wait a bit for the system to process the change, then check actual state
+                // This ensures we send the event with the device that was actually selected
+                // (e.g., if wired headphones prevent switching to receiver, we'll detect that)
                 handler.postDelayed({
+                    val (actualTitle, actualType) = getCurrentRoute()
+                    Log.d(TAG, "After switch attempt: requested=$deviceType, actual=$actualType")
                     sendDeviceEvent(actualTitle, actualType)
                 }, 300)
                 
