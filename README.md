@@ -1,5 +1,9 @@
 # Output Route Selector
 
+[![Pub Version](https://img.shields.io/pub/v/output_route_selector)](https://pub.dev/packages/output_route_selector)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey)](https://flutter.dev)
+
 A Flutter plugin that provides native audio output selection UI for iOS and Android.
 
 ## Demo
