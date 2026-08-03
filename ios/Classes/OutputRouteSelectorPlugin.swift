@@ -15,7 +15,13 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         let instance = OutputRouteSelectorPlugin()
         sharedInstance = instance
         eventChannel.setStreamHandler(instance)
-        
+
+        // MethodChannel: programmatic route control. Used by the pending-selection
+        // middleware to restore the user's choice after another audio engine
+        // (call SDK) resets the session on connect.
+        let methodChannel = FlutterMethodChannel(name: "output_route_selector/methods", binaryMessenger: registrar.messenger())
+        registrar.addMethodCallDelegate(instance, channel: methodChannel)
+
         // Register PlatformView factory for native button
         let factory = AudioOutputButtonFactory(messenger: registrar.messenger(), plugin: instance)
         registrar.register(factory, withId: "audio_output_button")
@@ -47,107 +53,92 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         try session.overrideOutputAudioPort(.none)
     }
     
-    private func selectAudioOutput(title: String) {
-        logger.info("🎯 Selected audio output: \(title)")
-        
+    /// Switch the output route.
+    ///
+    /// `source` is forwarded to Flutter with the resulting event so the
+    /// middleware can tell a real user pick (`userSelection`) apart from a
+    /// programmatic restore (`pendingRestore`) — only the former becomes the
+    /// pending selection.
+    private func selectAudioOutput(title: String, source: String, completion: (([String: Any]?) -> Void)? = nil) {
+        logger.info("🎯 Selected audio output: \(title) (source: \(source))")
+
         // Set flag to prevent observer from reacting
         isHandlingAudioRouteChange = true
-        
+
         let lowercasedTitle = title.lowercased()
-        
+
         do {
             if lowercasedTitle == "speaker" {
                 try switchToSpeaker()
-                logger.info("✅ Requested switch to speaker via menu")
+                logger.info("✅ Requested switch to speaker")
             } else if lowercasedTitle == "receiver" {
                 try switchToReceiver()
-                logger.info("✅ Requested switch to receiver via menu")
+                logger.info("✅ Requested switch to receiver")
             } else if lowercasedTitle == "wiredheadset" || lowercasedTitle == "headphones" {
-                switchToWiredHeadsetViaMenu()
-                return
+                try switchToWiredHeadset()
+                logger.info("✅ Requested switch to wired headset")
             } else {
                 // Bluetooth device
-                switchToBluetoothViaMenu(deviceTitle: title)
-                return
+                try switchToBluetooth(deviceTitle: title)
+                logger.info("✅ Requested switch to Bluetooth '\(title)'")
             }
-            
+
             // Check actual result after delay and send the REAL active device
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.sendActualActiveDevice()
+                let device = self?.sendActualActiveDevice(source: source)
+                completion?(device)
             }
         } catch {
-            logger.error("❌ Error switching audio output via menu: \(error.localizedDescription)")
+            logger.error("❌ Error switching audio output: \(error.localizedDescription)")
             isHandlingAudioRouteChange = false
+            completion?(nil)
         }
     }
-    
-    private func switchToWiredHeadsetViaMenu() {
+
+    private func switchToWiredHeadset() throws {
         let session = AVAudioSession.sharedInstance()
         guard let availableInputs = session.availableInputs,
               let wiredInput = availableInputs.first(where: { input in
                   input.portType == .headphones || input.portType == .headsetMic || input.portType == .usbAudio
               }) else {
             logger.error("❌ Wired headset not available")
-            isHandlingAudioRouteChange = false
-            return
+            throw AudioRouteError.deviceUnavailable
         }
-        
-        do {
-            try session.setPreferredInput(wiredInput)
-            logger.info("✅ Requested switch to wired headset via menu")
-            
-            // Check actual result after delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.sendActualActiveDevice()
-            }
-        } catch {
-            logger.error("❌ Error setting wired headset: \(error.localizedDescription)")
-            isHandlingAudioRouteChange = false
-        }
+
+        try session.setPreferredInput(wiredInput)
     }
-    
-    private func switchToBluetoothViaMenu(deviceTitle: String) {
+
+    private func switchToBluetooth(deviceTitle: String) throws {
         let session = AVAudioSession.sharedInstance()
         guard let availableInputs = session.availableInputs,
               let bluetoothInput = availableInputs.first(where: { input in
                   isBluetoothDevice(input.portType) && input.portName == deviceTitle
               }) else {
             logger.error("❌ Bluetooth device '\(deviceTitle)' not available")
-            isHandlingAudioRouteChange = false
-            return
+            throw AudioRouteError.deviceUnavailable
         }
-        
-        do {
-            try session.setPreferredInput(bluetoothInput)
-            logger.info("✅ Requested switch to Bluetooth '\(deviceTitle)' via menu")
-            
-            // Check actual result after delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.sendActualActiveDevice()
-            }
-        } catch {
-            logger.error("❌ Error setting Bluetooth device: \(error.localizedDescription)")
-            isHandlingAudioRouteChange = false
-        }
+
+        try session.setPreferredInput(bluetoothInput)
     }
-    
-    /// Get actual current audio route and send event with REAL active device
-    private func sendActualActiveDevice() {
+
+    /// Resolve the device that is active in the audio session right now.
+    /// Read-only: sends no event and does not touch `isHandlingAudioRouteChange`.
+    private func activeDevice() -> [String: Any] {
         let session = AVAudioSession.sharedInstance()
         let currentRoute = session.currentRoute
-        
+
         let activeOutputTypes = Set(currentRoute.outputs.map { $0.portType })
-        
+
         var title: String
         var deviceType: String
-        
+
         if activeOutputTypes.contains(.builtInSpeaker) {
             title = "speaker"
             deviceType = "speaker"
         } else if activeOutputTypes.contains(.builtInReceiver) {
             title = "receiver"
             deviceType = "receiver"
-        } else if let wiredOutput = currentRoute.outputs.first(where: { output in
+        } else if currentRoute.outputs.contains(where: { output in
             output.portType == .headphones || output.portType == .headsetMic || output.portType == .usbAudio
         }) {
             title = "wiredHeadset"
@@ -162,20 +153,31 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
             title = "unknown"
             deviceType = "speaker"
         }
-        
+
+        return [
+            "title": title,
+            "isActive": true,
+            "deviceType": deviceType
+        ]
+    }
+
+    /// Get actual current audio route and send event with REAL active device
+    @discardableResult
+    private func sendActualActiveDevice(source: String) -> [String: Any] {
+        let device = activeDevice()
+
         isHandlingAudioRouteChange = false
-        
+
         sendEvent([
             "event": "audioRouteChanged",
-            "activeDevice": [
-                "title": title,
-                "isActive": true,
-                "deviceType": deviceType
-            ]
+            "source": source,
+            "activeDevice": device
         ])
-        logger.info("📤 Sent ACTUAL active device: \(title) (type: \(deviceType))")
+        logger.info("📤 Sent ACTUAL active device: \(String(describing: device["title"])) (source: \(source))")
+
+        return device
     }
-    
+
     // MARK: - Helper Methods
     
     private func isBluetoothDevice(_ portType: AVAudioSession.Port) -> Bool {
@@ -236,10 +238,14 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
         // .override is used when overrideOutputAudioPort is called (from Control Center or native UI)
         // .newDeviceAvailable/.oldDeviceUnavailable for device changes (connect/disconnect)
         // .categoryChange for category changes
-        let isUserInitiated = reason == .override || 
-                              reason == .newDeviceAvailable || 
-                              reason == .oldDeviceUnavailable || 
-                              reason == .categoryChange
+        // .routeConfigurationChange is what a call SDK produces when it restarts
+        // its audio unit mid-call — that also drops a user-selected route, so it
+        // must be reported like the rest.
+        let isUserInitiated = reason == .override ||
+                              reason == .newDeviceAvailable ||
+                              reason == .oldDeviceUnavailable ||
+                              reason == .categoryChange ||
+                              reason == .routeConfigurationChange
         
         guard isUserInitiated else {
             logger.info("⚠️ Audio route change ignored - reason: \(reason.rawValue)")
@@ -306,6 +312,7 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
                 if let device = activeDevice {
                     self.sendEvent([
                         "event": "audioRouteChanged",
+                        "source": "system",
                         "activeDevice": device
                     ])
                     self.logger.info("✅ Audio route changed detected (attempt \(attempt)/\(maxAttempts))")
@@ -330,6 +337,46 @@ public class OutputRouteSelectorPlugin: NSObject, FlutterPlugin {
     }
 }
 
+// MARK: - Errors
+
+enum AudioRouteError: Error {
+    /// The requested device is not present in the audio session.
+    case deviceUnavailable
+}
+
+// MARK: - FlutterMethodCallHandler
+
+@available(iOS 14.0, *)
+extension OutputRouteSelectorPlugin {
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        switch call.method {
+        case "getCurrentRoute":
+            result(activeDevice())
+
+        case "selectAudioOutput":
+            guard let args = call.arguments as? [String: Any],
+                  let title = args["title"] as? String else {
+                result(FlutterError(code: "invalid_arguments", message: "selectAudioOutput requires a 'title'", details: nil))
+                return
+            }
+
+            // Programmatic switch — tagged so the middleware does not mistake it
+            // for a fresh user pick.
+            selectAudioOutput(title: title, source: "pendingRestore") { device in
+                result(device)
+            }
+
+        // Android-only picker methods: the shared Dart channel calls them on
+        // Android only, but answer instead of throwing if they ever arrive here.
+        case "showAudioOutputDialog", "dismissAudioOutputDialog":
+            result(nil)
+
+        default:
+            result(FlutterMethodNotImplemented)
+        }
+    }
+}
+
 // MARK: - FlutterStreamHandler
 
 extension OutputRouteSelectorPlugin: FlutterStreamHandler {
@@ -339,7 +386,7 @@ extension OutputRouteSelectorPlugin: FlutterStreamHandler {
         
         // Send current audio route immediately after listener is registered
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.sendActualActiveDevice()
+            self?.sendActualActiveDevice(source: "initial")
         }
         
         return nil
@@ -449,9 +496,9 @@ extension OutputRouteSelectorPlugin {
         return UIMenu(title: "", children: menuActions)
     }
     
-    /// Handle audio output selection from menu
+    /// Handle audio output selection from menu — this is the user's own pick.
     func handleMenuSelection(_ title: String) {
-        selectAudioOutput(title: title)
+        selectAudioOutput(title: title, source: "userSelection")
     }
 }
 

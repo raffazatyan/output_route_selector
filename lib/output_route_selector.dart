@@ -29,5 +29,9 @@ library output_route_selector;
 
 export 'src/audio_device_type.dart';
 export 'src/audio_model.dart';
+export 'src/audio_route_change_source.dart';
+export 'src/audio_route_event.dart';
+export 'src/output_route_middleware.dart';
 export 'src/output_route_selector_platform.dart';
+export 'src/route_enforcement_result.dart';
 export 'src/output_route_selector_widget.dart';
