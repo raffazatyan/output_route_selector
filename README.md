@@ -33,7 +33,7 @@ To use this plugin effectively on iOS, make sure your app is playing or recordin
 
 ```yaml
 dependencies:
-  output_route_selector: ^2.1.2
+  output_route_selector: ^2.1.3
 ```
 
 ## iOS Setup
