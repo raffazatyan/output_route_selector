@@ -26,23 +26,7 @@ import io.flutter.plugin.platform.PlatformViewRegistry
 
 class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.StreamHandler, MethodChannel.MethodCallHandler {
     private val TAG = "OutputRouteSelector"
-
-    companion object {
-        /// User picked a device in the native dialog. Only these become the
-        /// pending selection on the Flutter side.
-        const val SOURCE_USER_SELECTION = "userSelection"
-
-        /// The system moved the route: headset plug, Bluetooth (dis)connect, or
-        /// another audio engine (call SDK) reconfiguring AudioManager.
-        const val SOURCE_SYSTEM = "system"
-
-        /// First snapshot sent right after the event stream is listened to.
-        const val SOURCE_INITIAL = "initial"
-
-        /// Programmatic switch triggered by the pending-selection middleware.
-        const val SOURCE_PENDING_RESTORE = "pendingRestore"
-    }
-
+    
     private lateinit var context: Context
     private var activity: Activity? = null
     private var eventSink: EventChannel.EventSink? = null
@@ -114,23 +98,6 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
             "dismissAudioOutputDialog" -> {
                 dismissAudioOutputDialog()
                 result.success(null)
-            }
-            "getCurrentRoute" -> {
-                val (title, deviceType) = getCurrentRoute()
-                result.success(deviceMap(title, deviceType))
-            }
-            "selectAudioOutput" -> {
-                val title = call.argument<String>("title")
-                if (title == null) {
-                    result.error("invalid_arguments", "selectAudioOutput requires a 'title'", null)
-                    return
-                }
-                val deviceType = call.argument<String>("deviceType") ?: deviceTypeFromTitle(title)
-                // Programmatic switch — tagged so the middleware does not mistake
-                // it for a fresh user pick.
-                switchAudioOutput(title, deviceType, SOURCE_PENDING_RESTORE) { actualTitle, actualType ->
-                    result.success(deviceMap(actualTitle, actualType))
-                }
             }
             else -> result.notImplemented()
         }
@@ -297,40 +264,20 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
     private fun sendCurrentRoute() {
         val (title, deviceType) = getCurrentRoute()
         lastSentDeviceType = deviceType
-        sendDeviceEvent(title, deviceType, SOURCE_INITIAL)
+        sendDeviceEvent(title, deviceType)
         Log.d(TAG, "Sent initial route: $title (type: $deviceType)")
     }
-
+    
     /// Check current audio route and send event if changed
     private fun checkAndSendCurrentRoute() {
         val (title, deviceType) = getCurrentRoute()
-
+        
         // Only send if changed
         if (deviceType != lastSentDeviceType) {
             lastSentDeviceType = deviceType
-            sendDeviceEvent(title, deviceType, SOURCE_SYSTEM)
+            sendDeviceEvent(title, deviceType)
             Log.d(TAG, "Route changed externally to: $title")
         }
-    }
-
-    /// Guess a switching strategy from a device title when Flutter did not send
-    /// one. Bluetooth device titles are free-form names, so anything unknown is
-    /// treated as Bluetooth.
-    private fun deviceTypeFromTitle(title: String): String {
-        return when (title.lowercase()) {
-            "speaker" -> "speaker"
-            "receiver" -> "receiver"
-            "wiredheadset", "headphones" -> "wiredHeadset"
-            else -> "bluetooth"
-        }
-    }
-
-    private fun deviceMap(title: String, deviceType: String): Map<String, Any> {
-        return mapOf(
-            "title" to title,
-            "isActive" to true,
-            "deviceType" to deviceType
-        )
     }
     
     fun getActivity(): Activity? = activity
@@ -353,8 +300,7 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                         anchorWidth,
                         anchorHeight,
                         onDeviceSelected = { title, deviceType ->
-                            // The user's own pick — becomes the pending selection.
-                            switchAudioOutput(title, deviceType, SOURCE_USER_SELECTION)
+                            switchAudioOutput(title, deviceType)
                         },
                         onDialogDismissed = {
                             // Clear reference when dialog is dismissed
@@ -443,18 +389,8 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
         return devices
     }
     
-    /// Switch to a specific audio output.
-    ///
-    /// [source] is forwarded to Flutter with the resulting event so the pending
-    /// -selection middleware can tell a user pick apart from a programmatic
-    /// restore. [onSwitched] receives the route that is actually active after
-    /// the attempt — the system can refuse a switch.
-    fun switchAudioOutput(
-        deviceTitle: String,
-        deviceType: String,
-        source: String = SOURCE_USER_SELECTION,
-        onSwitched: ((String, String) -> Unit)? = null
-    ) {
+    /// Switch to a specific audio output
+    fun switchAudioOutput(deviceTitle: String, deviceType: String) {
         handler.post {
             try {
                 when (deviceType) {
@@ -490,31 +426,31 @@ class OutputRouteSelectorPlugin : FlutterPlugin, ActivityAware, EventChannel.Str
                 handler.postDelayed({
                     val (actualTitle, actualType) = getCurrentRoute()
                     Log.d(TAG, "After switch attempt: requested=$deviceType, actual=$actualType")
-                    sendDeviceEvent(actualTitle, actualType, source)
-                    onSwitched?.invoke(actualTitle, actualType)
+                    sendDeviceEvent(actualTitle, actualType)
                 }, 300)
-
+                
             } catch (e: Exception) {
                 Log.e(TAG, "Error switching audio output: ${e.message}")
-                val (actualTitle, actualType) = getCurrentRoute()
-                onSwitched?.invoke(actualTitle, actualType)
             }
         }
     }
     
-    private fun sendDeviceEvent(title: String, deviceType: String, source: String) {
+    private fun sendDeviceEvent(title: String, deviceType: String) {
         // Update last sent state
         lastSentDeviceType = deviceType
-
+        
         val event = mapOf(
             "event" to "audioRouteChanged",
-            "source" to source,
-            "activeDevice" to deviceMap(title, deviceType)
+            "activeDevice" to mapOf(
+                "title" to title,
+                "isActive" to true,
+                "deviceType" to deviceType
+            )
         )
-
+        
         handler.post {
             eventSink?.success(event)
-            Log.d(TAG, "Sent device event: $title (type: $deviceType, source: $source)")
+            Log.d(TAG, "Sent device event: $title (type: $deviceType)")
         }
     }
     
