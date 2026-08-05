@@ -14,7 +14,9 @@ A Flutter plugin that allows you to select and manage audio output routes (speak
   s.author           = { 'raffazatyan' => 'raffazatyan@gamil.com' }
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*.swift'
-  s.resources        = 'Classes/**/*.xcassets'
+  s.resource_bundles = {
+    'output_route_selector' => ['Classes/**/*.xcassets']
+  }
   s.dependency 'Flutter'
   s.platform = :ios, '14.0'
 
